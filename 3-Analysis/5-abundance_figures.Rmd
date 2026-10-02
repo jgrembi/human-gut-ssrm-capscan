@@ -693,7 +693,7 @@ hm_split <- ComplexHeatmap::pheatmap(
   border_color = "white"
 )
 
-legend_outlier <- Legend(labels = "0.2886", title = expression(italic(dsrAB) ~ "abundance" ~ (log[10]*"RPKG")), 
+legend_outlier <- Legend(labels = "0.2886", title = expression(italic(dsrAB) ~ "abundance" ~ (log[10]*"(RPKG+1)")), 
                       legend_gp = gpar(fill = "#440154"),
                       grid_width = unit(0.4, "cm"))
 
