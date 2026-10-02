@@ -232,4 +232,16 @@ pp = median_ratios %>%
   pivot_wider(id_cols = subject, names_from = sample_type, values_from = median_ratio)
 
 t.test(pp$Capsule, pp$Stool, paired = TRUE)
+
+# cohen's d
+# adjust for small sample size
+effectsize::cohens_d(
+  pp$Capsule,
+  pp$Stool,
+  data=pp,
+  paired = TRUE,
+  adjust = TRUE,
+  ci = 0.95
+)
+
 ```
