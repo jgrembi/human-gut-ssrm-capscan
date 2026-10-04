@@ -14,7 +14,7 @@ source(paste0(here::here(), "/1-Config/config.R"))
 meta <- read_tsv(paste0(configDir, "/sampleReadList.txt"))
 ```
 
-# total samples
+# final samples to be included in analyses
 ```{r}
 samples_drop=c('D17_2', 'P17_1', 'O5_1', 'O15_1', 'N17_1', 'M4_2', 'M20_2', 'M19_1', 'M16_2', 'K1_1', 'K21_2', 'K19_2', 'K17_2', 'K11_1', 'J7_2', 'J1_2', 'J17_1', 'I13_1', 'H5_2', 'H13_2', 'F5_2', 'F23_2', 'F21_2', 'F1_2', 'E7_1', 'E21_1', 'E18_2', 'E16_2', 'E12_2', 'E10_2', 'D5_2', 'D19_1', 'D11_2', 'C3_1', 'C1_1', 'B15_1', 'A23_1', 'A21_1', 'A13_2', 'A14_2', 'K23_2')
 
@@ -31,7 +31,9 @@ n_samples_total <- samples_used %>%
   # find the number of genes in each sample and the sum of their RPKGs
   group_by(Type) %>%
   summarize(n_samples=n_distinct(samplename))
+sum((n_samples_total %>% filter(str_detect(Type, "Capsule")))$n_samples)
 
+saveRDS(n_samples_total, file = paste0(dataDir, "/number_samples_type.rds"))
 ```
 
 
@@ -61,45 +63,11 @@ samples_no_dups <- samples %>%
 ```
 
 ```{r}
-# # how many total stool samples and capsule samples?
-# sample_numbers <- samples_no_dups %>%
-# # keep all samples, even those that had an RPKG of 0
-# # make subject a factor
-#   mutate(subject = factor(subject)) %>%
-# # add capsule type (1,2,3,4, most proximal to most distal)
-#   left_join(meta %>% select(samplename, Type, Set, Main), 
-#             by = c("sample" = "samplename")) %>%
-#   # selects only sets 2,3,4,5
-#   filter(!Set %in% c(1,6,7,8,9,10,11,12,13)) %>%
-#   # remove 7 samples that were resequenced (subject 4,    subject 3)
-#   #keep sample with more mapped reads
-#   filter(!sample %in% c("O17_1", "O19_1", "O21_1", "L23_1",     "K23_1", "M15_1", "M23_1")) %>%
-#   group_by(Type) %>%
-#   summarize(n=n_distinct(sample))
-# ##136 capsule samples, 40 stool samples
-# 
-# # number of samples for each subject
-# samples_by_subject <- samples_no_dups %>%
-# # keep all samples, even those that had an RPKG of 0
-# # make subject a factor
-#   mutate(subject = factor(subject)) %>%
-# # add capsule type (1,2,3,4, most proximal to most distal)
-#   left_join(meta %>% select(samplename, Type, Set, Main), 
-#             by = c("sample" = "samplename")) %>%
-#   # selects only sets 2,3,4,5
-#   filter(!Set %in% c(1,6,7,8,9,10,11,12,13)) %>%
-#   # remove 7 samples that were resequenced (subject 4,    subject 3)
-#   #keep sample with more mapped reads
-#   filter(!sample %in% c("O17_1", "O19_1", "O21_1", "L23_1",     "K23_1", "M15_1", "M23_1")) %>%
-#   group_by(subject, Type) %>%
-#   summarize(n=n_distinct(sample))
-```
-
-```{r}
 # filter and remove duplicate genes
 samples_unique_genes <- samples_no_dups %>%
-# Remove RPKGs of 0 (feature counts keeps genes even when nothing has mapped to them) 
-  filter(RPKG>0) %>%
+  # ED update 10/4/26: actually keep RPKG of zero so we can see which samples did not have reads matching the coassembly hits
+  # Remove RPKGs of 0 (feature counts keeps genes even when nothing has mapped to them) 
+  #filter(RPKG>0) %>%
 # make subject a factor
   mutate(subject = factor(subject)) %>%
 # add capsule type (1,2,3,4, most proximal to most distal)
@@ -115,6 +83,10 @@ samples_unique_genes <- samples_no_dups %>%
   group_by(geneID, sample) %>%
   slice_max(Score, n = 1, with_ties = FALSE) %>%
   ungroup()
+
+samples_in_coassemblies_no_hits <- meta %>% 
+  filter(samplename %in% setdiff(unique(samples_used$samplename), unique(samples_unique_genes$sample)))
+# these are the samples that are from coassemblies with no hits (which are not the same as samples from coassemblies with hits but no reads mapping in the individual sample)
 ```
 
 # Add a column to samples that has the single_closest_ref
@@ -135,8 +107,9 @@ asr <- read_tsv(paste0(abundanceDirASR, "/concat_asrABC_Abundances_RPKG_redo.txt
 
 # filter and remove duplicate genes
 asr_unique_cluster <- asr %>%
-# Remove RPKGs of 0 (feature counts keeps genes even when nothing has mapped to them) 
-  filter(RPKG>0) %>%
+  # ED update 10/4/26: actually keep RPKG of zero so we can see which samples did not have reads matching the coassembly hits
+  # Remove RPKGs of 0 (feature counts keeps genes even when nothing has mapped to them) 
+  #filter(RPKG>0) %>%
   mutate(subject = factor(subject)) %>%
 # add capsule type
   left_join(meta %>% select(samplename, Type, Set), 
@@ -155,8 +128,6 @@ asr_unique_cluster <- asr %>%
 # filtering by geneID leaves different genes with the same geneNum/locations, and you end up with more than 3 hits for each contig
 
 saveRDS(asr_unique_cluster, file = paste0(dataDir, "/asr_unique_cluster.rds"))
-
-
 ```
 
 
