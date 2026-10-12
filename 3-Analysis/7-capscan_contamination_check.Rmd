@@ -4,6 +4,20 @@ date: "11 October 2026"
 output: html_document
 author: "Elizabeth Daigle"
 ---
+## in comparing the results with the potentially contaminated capsules to the results without the potentially contaminated capsules
+### Table 1: 
+# 1 fewer positive subject for capsules 2 and 4
+# median RPKG values in SI compared to stool are even larger than they were before (5-14.5x larger)
+# the number of samples decreased but the % of positive samples increased for all but Capsule 4
+
+### heatmap: same pattern, RPKG higher in SI for a few subject/species combos
+# G. pamelaeae ratio flipped for 1 subject (previously enriched in SI for that subject and now enriched in stool)
+
+### figure 4: lose subject 9's afternoon samples for capsule 1
+
+### asrABC: 1 less "unique" hit for SI
+# median ratio of dsr:asr increases a bit for SI
+
 ```{r}
 rm(list = ls())
 ```
