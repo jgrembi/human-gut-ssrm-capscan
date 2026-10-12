@@ -21,6 +21,10 @@ stool={'Stool_1', 'Stool_2', 'Stool_3', 'Stool_4', 'Stool_5', 'Stool_6', 'Stool_
 
 dsr_hit_samples={'Capsule_1', 'Capsule_2', 'Capsule_3', 'Capsule_4','Capsule_6', 'Capsule_7','Capsule_9','Capsule_11', 'Capsule_12', 'Capsule_13', 'Capsule_14','Stool_2', 'Stool_3','Stool_6', 'Stool_7','Stool_9', 'Stool_11', 'Stool_12', 'Stool_13', 'Stool_14'}
 
+control = {'K23_2'}
+# C1_1 and F21_2 don't have enough bases for prodigal
+# the other controls have no contigs longer than 1 kb
+
 sampletype={'Capsule', 'Stool'}
 microorganism={'bacterial', 'archaeal'}
 microorg={'arch', 'bact'}
@@ -121,7 +125,17 @@ rule all:
 		"workflow/out/treeInfo/queryDistanceInfo_no_2018_capsule.csv",
 		"workflow/out/treeInfo/queryDistanceInfo_no_2018_capsule.json",
 		"workflow/out/treeInfo/closestRefInfo_allScoreThresholdHits_no_2018_capsule.csv",
-		"workflow/out/treeInfo/closestRefList_no_2018_capsule.txt"
+		"workflow/out/treeInfo/closestRefList_no_2018_capsule.txt",
+		
+		# check whether there are any hits to the blank controls
+		# the domtblout files returned no hits
+		expand(join(config["hmmOutDir"],"{control}_dsrAB_bact.hmm.out"), control = control),
+		expand(join(config["domtblDir"],"{control}_dsrAB_bact.domtblout"), control = control),
+		expand(join(config["hmmOutDir"],"{control}_dsrAB_arch.hmm.out"), control = control),
+		expand(join(config["domtblDir"],"{control}_dsrAB_arch.domtblout"), control = control),
+		expand(join(config["msaDir"],"sto/{control}_dsrAB_bact.sto"), control = control),
+		expand(join(config["msaDir"],"sto/{control}_dsrAB_arch.sto") control = control)
+
 
 ## getting abundances below 
 		# get bowtie 2 index
@@ -240,6 +254,7 @@ include: "workflow/rules/runHMMERCapsule.smk"
 include: "workflow/rules/cleanHitsCapsule.smk"
 include: "workflow/rules/fragmentInsertionCapsule.smk"
 include: "workflow/rules/getTreeInfoCapsule.smk"
+include: "workflow/rules/runHMMER_controls.smk"
 include: "workflow/rules/mapReads.smk"
 include: "workflow/rules/perGeneCounts.smk"
 include: "workflow/rules/getGeneAbunCapsule.smk"
