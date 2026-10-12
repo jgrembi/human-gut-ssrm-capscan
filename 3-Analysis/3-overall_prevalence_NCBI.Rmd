@@ -378,7 +378,10 @@ depth_prev <- read_xlsx(path = paste0(suppTableDir, "ssrm_suppTables.xlsx"), she
     depth_Gb = as.numeric(str_remove(`Depth in Gb, pre- or post-"QC" (trim, human-reads removal, etc.)`, "\\s*\\(.*\\)"))
   )
 
-depth_prev_plot <- ggplot(depth_prev, aes(x = depth_Gb, y = `Sample SSRM prevalence`, color = `Age category (under or over 3)`)) +
+depth_prev_filter <- depth_prev %>%
+  filter(!`Age category (under or over 3)`=="N/A")
+
+depth_prev_plot <- ggplot(depth_prev_filter, aes(x = depth_Gb, y = `Sample SSRM prevalence`, color = `Age category (under or over 3)`)) +
   geom_point(size = 3, alpha = 0.8) +
   labs(
     x = "Sequencing depth (Gigabases)",
@@ -388,6 +391,16 @@ depth_prev_plot <- ggplot(depth_prev, aes(x = depth_Gb, y = `Sample SSRM prevale
   theme_classic(base_size = 14)
 
 ggsave(plot = depth_prev_plot, width = 8, height = 5, file = paste0(figureDir, "depth_v_prev.jpeg"))
+
+
+## correlation for adults
+depth_prev_adults <- depth_prev %>%
+  filter(`Age category (under or over 3)`=="over 3") %>%
+  select(`Sample SSRM prevalence`, depth_Gb) %>%
+  filter(!is.na(depth_Gb))
+
+cor.test(x=depth_prev_adults$`Sample SSRM prevalence`, y=depth_prev_adults$depth_Gb, 
+         method = "spearman", exact = FALSE)
 
 ```
 
