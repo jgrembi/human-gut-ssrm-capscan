@@ -62,6 +62,330 @@ prevalence <- bind_rows(overall, under_3, over_3) %>%
   relocate(group, .before = n_biosamples_hits)
 ```
 
+# calculate prevalence for mothers versus children in the InfantGut cohort
+# calculate prevalences for all studies with >=50 samples
+```{r}
+infantgut_samples <- metadata_final %>%
+  filter(notes == "InfantGut: Dynamics and Stabilization of the Human Gut Microbiome during the First Year of Life")
+  
+infantgut_prev <- hits_final_ages %>%
+  filter(biosample_id %in% infantgut_samples$sample_id) 
+# this means none of the infants or their mothers have any SSRM detected
+
+# PRJNA354235; 915 samples
+study_PRJNA354235 <- metadata_final %>%
+  filter(notes == "Human gut metagenome raw sequence reads")
+
+study_PRJNA354235_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA354235$sample_id)
+
+(n_distinct(study_PRJNA354235_prev$biosample_id)/n_distinct(study_PRJNA354235$sample_id))*100
+
+# PRJNA290380; 737 samples
+study_PRJNA290380 <- metadata_final %>%
+  filter(notes == "metagenomes from children in the DIABIMMUNE cohort, followed from birth to age 3")
+
+study_PRJNA290380_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA290380$sample_id)
+
+(n_distinct(study_PRJNA290380_prev$biosample_id)/n_distinct(study_PRJNA290380$sample_id))*100
+
+# PRJNA301903; 385 samples
+study_PRJNA301903 <- metadata_final %>%
+  filter(notes == "Metagenomic sequencing of preterm infant gut microbiota raw sequence reads")
+
+study_PRJNA301903_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA301903$sample_id)
+
+(n_distinct(study_PRJNA301903_prev$biosample_id)/n_distinct(study_PRJNA301903$sample_id))*100
+
+
+# PRJNA422434; 370 samples
+study_PRJNA422434 <- metadata_final %>%
+  filter(notes == "A metagenome-wide association study of gut microbiota in type 2 diabetes")
+
+study_PRJNA422434_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA422434$sample_id)
+
+(n_distinct(study_PRJNA422434_prev$biosample_id)/n_distinct(study_PRJNA422434$sample_id))*100
+
+
+# PRJEB4336; 292 samples
+study_PRJEB4336 <- metadata_final %>%
+  filter(notes == "Richness of human gut microbiome correlates with metabolic markers")
+
+study_PRJEB4336_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB4336$sample_id)
+
+(n_distinct(study_PRJEB4336_prev$biosample_id)/n_distinct(study_PRJEB4336$sample_id))*100
+
+
+# PRJEB12123; 249 samples
+study_PRJEB12123 <- metadata_final %>%
+  filter(notes == "metagenome-wide association studies on fecal samples: gut microbial dysbiosis in young adults with obesity")
+
+study_PRJEB12123_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB12123$sample_id)
+
+(n_distinct(study_PRJEB12123_prev$biosample_id)/n_distinct(study_PRJEB12123$sample_id))*100
+
+
+# PRJEB5224; 249 samples
+study_PRJEB5224 <- metadata_final %>%
+  filter(notes == "human gut metagenome from stool samples; integrated catalog of reference genes in the human gut microbiome")
+
+study_PRJEB5224_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB5224$sample_id)
+
+(n_distinct(study_PRJEB5224_prev$biosample_id)/n_distinct(study_PRJEB5224$sample_id))*100
+
+# same metadata as PRJEB28245
+meta_5224 <- read_xlsx(path = paste0(dataDir, "28245_sequencing_meta.xlsx"), range = "A3:O1270")
+meta_5224_seq <- meta_5224 %>%
+  filter(`ID used in analysis` %in% study_PRJEB5224$`sample name`|`Sample ID` %in% study_PRJEB5224$`sample name`) %>%
+  mutate(depth_Gnt = (`# Raw Reads` * `Avg read length` * 2)/1E9)
+mean(meta_5224_seq$depth_Gnt, na.rm = TRUE)
+
+
+# PRJEB1220; 233 samples
+study_PRJEB1220 <- metadata_final %>%
+  filter(notes == "method for identifying metagenomic species and variable genetic elements by exhaustive co-abundance binning")
+
+study_PRJEB1220_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB1220$sample_id)
+
+(n_distinct(study_PRJEB1220_prev$biosample_id)/n_distinct(study_PRJEB1220$sample_id))*100
+
+# using the supplemental table to find average raw reads for samples we use
+meta_1220 <- read_xls(path = paste0(dataDir, "1220_sequencing_meta.xls"), sheet = 2, range = "A1:H397")
+study_PRJEB1220_fixnames <- study_PRJEB1220 %>%
+  mutate(`sample name` = str_replace(`sample name`, "-", "."))
+meta_1220_seq <- meta_1220 %>%
+  filter(Sample %in% study_PRJEB1220_fixnames$`sample name`) %>%
+  mutate(depth_Gnt = (`Raw bases`/1E9))
+mean(meta_1220_seq$depth_Gnt, na.rm = TRUE)
+
+
+# PRJEB6997; 232 samples
+study_PRJEB6997 <- metadata_final %>%
+  filter(notes == "gut microbiome dysbiosis in RA")
+
+study_PRJEB6997_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB6997$sample_id)
+
+(n_distinct(study_PRJEB6997_prev$biosample_id)/n_distinct(study_PRJEB6997$sample_id))*100
+
+
+# PRJDB3601; 168 samples
+study_PRJDB3601 <- metadata_final %>%
+  filter(notes == "metagenomics of Japanese gut microbiomes")
+
+study_PRJDB3601_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJDB3601$sample_id)
+
+(n_distinct(study_PRJDB3601_prev$biosample_id)/n_distinct(study_PRJDB3601$sample_id))*100
+
+
+# PRJNA356102; 168 samples
+study_PRJNA356102 <- metadata_final %>%
+  filter(notes == "human gut metagenome in RA; this does not make sense since it says ankylosing spondylitis patient")
+
+study_PRJNA356102_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA356102$sample_id)
+
+(n_distinct(study_PRJNA356102_prev$biosample_id)/n_distinct(study_PRJNA356102$sample_id))*100
+
+
+# PRJEB7774; 156 samples
+study_PRJEB7774 <- metadata_final %>%
+  filter(notes == "MGWAS on stools from healthy controls, advanced adenoma and carcinoma patients")
+
+study_PRJEB7774_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB7774$sample_id)
+
+(n_distinct(study_PRJEB7774_prev$biosample_id)/n_distinct(study_PRJEB7774$sample_id))*100
+
+
+# PRJNA356225; 140 samples
+study_PRJNA356225 <- metadata_final %>%
+  filter(notes == "Metagenomic sequencing; this study presented the bacterial diversity of human stool sample from the Vogt-Koyanagi-Harada disease patients in Chinese population")
+
+study_PRJNA356225_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA356225$sample_id)
+
+(n_distinct(study_PRJNA356225_prev$biosample_id)/n_distinct(study_PRJNA356225$sample_id))*100
+
+
+# PRJEB10878; 128 samples
+study_PRJEB10878 <- metadata_final %>%
+  filter(notes == "metagenome-wide association study on fecal samples from 74 CRC patients and 54 controls from China")
+
+study_PRJEB10878_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB10878$sample_id)
+
+(n_distinct(study_PRJEB10878_prev$biosample_id)/n_distinct(study_PRJEB10878$sample_id))*100
+
+
+#PRJNA305507; 111 samples
+study_PRJNA305507 <- metadata_final %>%
+  filter(notes == "Metagenomic sequencing to identify and measure the abundances of microorganisms present in stool samples from athletes")
+
+study_PRJNA305507_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA305507$sample_id)
+
+(n_distinct(study_PRJNA305507_prev$biosample_id)/n_distinct(study_PRJNA305507$sample_id))*100
+
+
+# PRJEB12449; 110 samples
+study_PRJEB12449 <- metadata_final %>%
+  filter(notes == "stool shotgun metagenomics from study looking at association between gut microbiome and CRC")
+
+study_PRJEB12449_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB12449$sample_id)
+
+(n_distinct(study_PRJEB12449_prev$biosample_id)/n_distinct(study_PRJEB12449$sample_id))*100
+
+
+# PRJEB15111; 97 samples
+study_PRJEB15111 <- metadata_final %>%
+  filter(notes == "identifying microbial metabolites associated with coronary heart disease; stool samples were collected in addition to the urine and plasma samples")
+
+study_PRJEB15111_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB15111$sample_id)
+
+(n_distinct(study_PRJEB15111_prev$biosample_id)/n_distinct(study_PRJEB15111$sample_id))*100
+
+
+# PRJNA353560; 97 samples
+study_PRJNA353560 <- metadata_final %>%
+  filter(notes == "Human gut microbiome in AS")
+
+study_PRJNA353560_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA353560$sample_id)
+
+(n_distinct(study_PRJNA353560_prev$biosample_id)/n_distinct(study_PRJNA353560$sample_id))*100
+
+
+# PRJNA290729; 92 samples
+study_PRJNA290729 <- metadata_final %>%
+  filter(notes == "Characterization of the distal gut microbiota in obese patients following a weight-loss intervention using whole metagenome shotgun sequencing")
+
+study_PRJNA290729_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA290729$sample_id)
+
+(n_distinct(study_PRJNA290729_prev$biosample_id)/n_distinct(study_PRJNA290729$sample_id))*100
+
+
+# PRJEB28245; 69 samples
+study_PRJEB28245 <- metadata_final %>%
+  filter(notes == "Assemblies of 760 MetaHIT metagenomes used in a pangenomic study")
+
+study_PRJEB28245_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB28245$sample_id)
+
+(n_distinct(study_PRJEB28245_prev$biosample_id)/n_distinct(study_PRJEB28245$sample_id))*100
+
+
+meta_28245 <- read_xlsx(path = paste0(dataDir, "28245_sequencing_meta.xlsx"), range = "A3:O1270")
+study_PRJEB28245_fixnames <- study_PRJEB28245 %>%
+  mutate(`sample name` = str_remove(`sample name`, "_assemblies"))
+meta_28245_seq <- meta_28245 %>%
+  filter(`ID used in analysis` %in% study_PRJEB28245_fixnames$`sample name`) %>%
+  mutate(depth_Gnt = (`# Raw Reads` * `Avg read length` * 2)/1E9)
+mean(meta_28245_seq$depth_Gnt, na.rm = TRUE)
+
+
+# PRJNA324129; 63 samples
+study_PRJNA324129 <- metadata_final %>%
+  filter(notes == "Human fecal microbiome before and after consumption of AH1206 - Raw sequence reads")
+
+study_PRJNA324129_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA324129$sample_id)
+
+(n_distinct(study_PRJNA324129_prev$biosample_id)/n_distinct(study_PRJNA324129$sample_id))*100
+
+
+# PRJEB17784; 59 samples
+study_PRJEB17784 <- metadata_final %>%
+  filter(notes == "comparing fecal microbiomes of L-DOPA-naïve PD subjects to controls by metagenomic analysis")
+
+study_PRJEB17784_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB17784$sample_id)
+
+(n_distinct(study_PRJEB17784_prev$biosample_id)/n_distinct(study_PRJEB17784$sample_id))*100
+
+
+# PRJEB12357; 55 samples
+study_PRJEB12357 <- metadata_final %>%
+  filter(notes == "shotgun sequencing after FMT")
+
+study_PRJEB12357_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJEB12357$sample_id)
+
+(n_distinct(study_PRJEB12357_prev$biosample_id)/n_distinct(study_PRJEB12357$sample_id))*100
+
+
+# PRJNA289586; 52 samples
+study_PRJNA289586 <- metadata_final %>%
+  filter(notes == "Human Gut Microbiome in a Multiplex Family Study of Type 1 Diabetes Mellitus")
+
+study_PRJNA289586_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA289586$sample_id)
+
+(n_distinct(study_PRJNA289586_prev$biosample_id)/n_distinct(study_PRJNA289586$sample_id))*100
+
+
+# PRJNA321058; 51 samples
+study_PRJNA321058 <- metadata_final %>%
+  filter(notes == "Increased intestinal microbial diversity following fecal microbiota transplant for active Crohn's disease")
+
+study_PRJNA321058_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA321058$sample_id)
+
+(n_distinct(study_PRJNA321058_prev$biosample_id)/n_distinct(study_PRJNA321058$sample_id))*100
+
+
+# PRJNA273761; 50 samples
+study_PRJNA273761 <- metadata_final %>%
+  filter(notes == "Metagenomes from human infant fecal samples with and without necrotizing enterocolitis")
+
+study_PRJNA273761_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA273761$sample_id)
+
+(n_distinct(study_PRJNA273761_prev$biosample_id)/n_distinct(study_PRJNA273761$sample_id))*100
+
+
+# NA for age group; PRJNA268964; 58 samples
+study_PRJNA268964 <- metadata_final %>%
+  filter(notes == "Human gut microbiome metagenome, gut microbiome diversity")
+
+study_PRJNA268964_prev <- hits_final_ages %>%
+  filter(biosample_id %in% study_PRJNA268964$sample_id)
+
+(n_distinct(study_PRJNA268964_prev$biosample_id)/n_distinct(study_PRJNA268964$sample_id))*100
+```
+# is depth related to study prevalence?
+```{r}
+depth_prev <- read_xlsx(path = paste0(suppTableDir, "ssrm_suppTables.xlsx"), sheet = "SuppTable4", range = "A1:J29") %>%
+  mutate(
+    qc_status = str_extract(`Depth in Gnt, pre- or post-"QC" (trim, human-reads removal, etc.)`, "(?<=\\()(pre|post)(?=-QC\\))"),
+    depth_Gnt = as.numeric(str_remove(`Depth in Gnt, pre- or post-"QC" (trim, human-reads removal, etc.)`, "\\s*\\(.*\\)"))
+  )
+
+depth_prev_plot <- ggplot(depth_prev, aes(x = depth_Gnt, y = `Sample SSRM prevalence`, color = `Age category (under or over 3)`)) +
+  geom_point(size = 3, alpha = 0.8) +
+  labs(
+    x = "Sequencing depth (Gigabases)",
+    y = "Study-wide SSRM prevalence",
+    color = "Age of study participants"
+  ) +
+  theme_classic(base_size = 14)
+
+ggsave(plot = depth_prev_plot, width = 8, height = 5, file = paste0(figureDir, "depth_v_prev.jpeg"))
+
+```
+
+
 # what studies are the infant hits from 
 ```{r}
 under_3_study <- hits_final_ages %>%
@@ -75,13 +399,17 @@ under_3_study <- hits_final_ages %>%
 ```{r}
 under_three_distribution <- data.frame(
   age_bin = c("0-1", "1-2", "2-3"),
-  n_total = c(1109,377,96)
+  n_total = c(266,376,95)
+  # across all studies
+  #n_total = c(1109,377,96)
 )
 
 age_color <- c("#B4D6E3", "#7F9DB1", "#0D3B66")
 
 hits_per_bin <- hits_final_ages %>%
-  filter(under_over_3 == "under 3") %>%
+  filter(biosample_id %in% study_PRJNA290380$sample_id) %>%
+  # across all studies
+  #filter(under_over_3 == "under 3") %>%
   group_by(biosample_id) %>%
   summarize(n_hits = n())
 
@@ -137,7 +465,7 @@ library(patchwork)
 
 plot <- total+prop_pos
 
-ggsave(plot = plot, width = 8, height = 5, file = paste0(figureDir, "under3_barplot.jpeg"))
+ggsave(plot = plot, width = 8, height = 5, file = paste0(figureDir, "under3_barplot_prjna290380.jpeg"))
 ```
 
 
