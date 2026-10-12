@@ -13,10 +13,10 @@ source(paste0(here::here(), "/1-Config/config.R"))
 ```
 
 ```{r}
+### Read in datasets from dm_abundance
 samples_unique_gene_casette <- readRDS(paste0(dataDir, "/samples_unique_genes_with_names_no_2018.rds"))
-```
+samples_unique_gene_casette_zeroes <- readRDS(paste0(dataDir, "/samples_unique_genes_with_names_no_2018_zeroes.rds"))
 
-```{r}
 #looking to see which contigs are mapping to several species
 contigs_multiple_refs <- samples_unique_gene_casette %>%
   group_by(contig) %>%
@@ -28,11 +28,9 @@ contigs_multiple_refs <- samples_unique_gene_casette %>%
     n_refs = n_distinct(single_closest_ref),
     refs = paste(unique(single_closest_ref), collapse = "; ")
   )
-```
 
+### choose a representative subunit
 
-# choose a representative subunit
-```{r}
 # manually select a subunit for the 6 contigs found in contigs_multiple_refs
 partial_genes <- c("Capsule_14.k141_153065_1", "Stool_14.k141_240693_1", "Stool_9.k141_270672_1")
 unknown_species <- c("Capsule_7.k141_250498_14", "Stool_7.k141_215370_50")
@@ -43,8 +41,20 @@ samples_unique_subunit_manual <- samples_unique_gene_casette %>%
   filter(!geneNum %in% unknown_species) %>%
   mutate(single_closest_ref = ifelse(contig == "k141_113757", "Desulfovibrio_piger__DslPige3", single_closest_ref))
 
+samples_unique_subunit_manual_zeroes <- samples_unique_gene_casette_zeroes %>%
+  filter(!geneNum %in% partial_genes) %>%
+  filter(!geneNum %in% unknown_species) %>%
+  mutate(single_closest_ref = ifelse(contig == "k141_113757", "Desulfovibrio_piger__DslPige3", single_closest_ref))
+
 ## value of 331 comes from this
 samples_unique_subunit_RPKG <- samples_unique_subunit_manual %>%
+  filter(single_closest_ref != "Moorella_thermoacetica_Y72_copy_2__MooTher5") %>%
+  group_by(contig, sample) %>%
+  slice_max(RPKG, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+## value of 419 comes from this 
+samples_unique_subunit_RPKG_zeroes <- samples_unique_subunit_manual_zeroes %>%
   filter(single_closest_ref != "Moorella_thermoacetica_Y72_copy_2__MooTher5") %>%
   group_by(contig, sample) %>%
   slice_max(RPKG, n = 1, with_ties = FALSE) %>%
@@ -94,15 +104,31 @@ capsule_type_summary <- samples_unique_subunit_RPKG %>%
          median_RPKG_sum_per_sample = paste0(median_RPKG_all_subj, " [IQR ", RPKG_25pct, "-", RPKG_75pct, "]")) %>%
   select(Type, n_subjects, n_genes_per_sample, median_RPKG_sum_per_sample)
 ```
-# find number of samples of each type for Table 1 caption
+
+
 ```{r}
-n_samples <- samples_unique_subunit_RPKG %>%
-  # find the number of genes in each sample and the sum of their RPKGs
-  group_by(sample_type) %>%
-  summarize(n_samples=n_distinct(sample))
+# from data management Rmd; all samples of each type
+n_samples_all_by_type <- readRDS(paste0(dataDir, "number_samples_type.RDS")) %>%
+  rename(n_samples_total=n_samples)
+
+# positive samples of each type
+n_samples_pos <- samples_unique_subunit_RPKG %>%
+  group_by(Type) %>%
+  summarize(n_samples_pos=n_distinct(sample))
+# add up capsule numbers to get value for Table 1 caption
+sum((n_samples_pos %>% filter(str_detect(Type, "Capsule")))$n_samples_pos)
+
+# making a new summary to also include the number of samples for each type and percentages of samples/subjects that are positive
+capsule_type_summary_new <- n_samples_pos %>% 
+  left_join(n_samples_all_by_type, by = "Type") %>%
+  left_join(capsule_type_summary, by = "Type") %>%
+  mutate(pct_pos_samples = n_samples_pos/n_samples_total,
+         pct_pos_subjects = n_subjects/15) %>%
+  mutate(n_samples_pos = paste0(n_samples_pos, " (", percent(pct_pos_samples, accuracy = 0.01), ")"),
+         n_subjects = paste0(n_subjects,    " (", percent(pct_pos_subjects, accuracy = 0.01), ")")) %>%
+  select(-c(pct_pos_samples, pct_pos_subjects))
+         
 ```
-
-
 
 # color palettes for plots
 ```{r}
