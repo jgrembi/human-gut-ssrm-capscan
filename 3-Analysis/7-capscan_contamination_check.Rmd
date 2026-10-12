@@ -1,0 +1,1329 @@
+---
+title: "7-capscan_contamination_check"
+date: "11 October 2026"
+output: html_document
+author: "Elizabeth Daigle"
+---
+```{r}
+rm(list = ls())
+```
+### Data management file
+# Read in packages, functions, and directories
+```{r}
+source(paste0(here::here(), "/1-Config/config.R"))
+```
+
+# Read in sample metadata
+```{r}
+meta <- read_tsv(paste0(configDir, "/sampleReadList.txt"))
+```
+
+# final samples to be included in analyses
+```{r}
+samples_drop=c('D17_2', 'P17_1', 'O5_1', 'O15_1', 'N17_1', 'M4_2', 'M20_2', 'M19_1', 'M16_2', 'K1_1', 'K21_2', 'K19_2', 'K17_2', 'K11_1', 'J7_2', 'J1_2', 'J17_1', 'I13_1', 'H5_2', 'H13_2', 'F5_2', 'F23_2', 'F21_2', 'F1_2', 'E7_1', 'E21_1', 'E18_2', 'E16_2', 'E12_2', 'E10_2', 'D5_2', 'D19_1', 'D11_2', 'C3_1', 'C1_1', 'B15_1', 'A23_1', 'A21_1', 'A13_2', 'A14_2', 'K23_2')
+
+possible_contam <- readRDS(paste0(dataDir, "sample_data_from_original_capscan_study.RDS")) %>%
+  filter(possible_contam == TRUE)
+
+samples_used <- meta %>%
+  filter(!samplename %in% samples_drop) %>%
+  filter(!Type=="Saliva") %>%
+  filter(!Subject %in% c("Control_1", "Control_2")) %>%
+  filter(!Set %in% c(1,6,7,8,9,10,11,12,13)) %>%
+  # remove 7 samples that were resequenced (subject 4,    subject 3)
+  #keep sample with more mapped reads
+  filter(!samplename %in% c("O17_1", "O19_1", "O21_1", "L23_1",     "K23_1", "M15_1", "M23_1")) %>%
+  filter(!samplename %in% possible_contam$meta_samplename)
+
+n_samples_total <- samples_used %>%
+  # find the number of genes in each sample and the sum of their RPKGs
+  group_by(Type) %>%
+  summarize(n_samples=n_distinct(samplename))
+sum((n_samples_total %>% filter(str_detect(Type, "Capsule")))$n_samples)
+
+saveRDS(n_samples_total, file = paste0(dataDir, "/sensitivity/number_samples_type.rds"))
+
+```
+
+
+# Read in dsrAB gene counts
+```{r}
+# capsule data
+capsule <- read_tsv(paste0(abundanceDir, "/Capsule/concat_dsrAB_Capsule_Abundances_RPKG_redo.txt"))
+# stool data
+stool <- read_tsv(paste0(abundanceDir, "/Stool/concat_dsrAB_Stool_Abundances_RPKG_redo.txt"))
+# combine capsule and stool data
+samples <- bind_rows(capsule, stool) %>%
+  mutate(subject=as.numeric(str_extract(.$coassembly, "\\d+")))
+```
+
+```{r}
+#which hits are dups?
+# want to make sure they all get filtered out since they have NA for distance
+closest_ref_no_2018 <- read_csv(paste0(dataDir, "closestRefInfo_allScoreThresholdHits_wSingleClosestRef_no_2018_capsule.csv")) 
+dups <- closest_ref_no_2018 %>%
+  filter(is.na(distance)) %>%
+  # agree that all but two are duplicates (they have another hit to the same gene)
+# Stool_14 220955_5 and Capsule_14 148417_5 should be added back in because they were marked as duplicates for genes in different coassemblies!
+  filter(!str_detect(hit_id, "Stool_14.k141_220955_5/63-175|Capsule_14.k141_148417_5/63-175"))
+
+samples_no_dups <- samples %>%
+  filter(!geneLoc %in% dups$hit_id)
+```
+
+```{r}
+# filter and remove duplicate genes
+samples_unique_genes <- samples_no_dups %>%
+  # Remove RPKGs of 0 (feature counts keeps genes even when nothing has mapped to them) 
+  filter(RPKG>0) %>%
+# make subject a factor
+  mutate(subject = factor(subject)) %>%
+# add capsule type (1,2,3,4, most proximal to most distal)
+  left_join(meta %>% select(samplename, Type, Set), 
+            by = c("sample" = "samplename")) %>%
+  #remove practice capsules found in subject 1 and others
+  filter(!Set %in% c(1,6,7,8,9,10,11,12,13)) %>%
+  # remove 7 samples that were resequenced (subject 4,    subject 3)
+  #keep sample with more mapped reads
+  filter(!sample %in% c("O17_1", "O19_1", "O21_1", "L23_1",     "K23_1", "M15_1", "M23_1")) %>%
+  # remove potentially contaminated capsules from analysis
+  filter(!sample %in% possible_contam$meta_samplename) %>%
+# filter for unique genes in each sample
+# want to keep gene domain with the highest score, if there is a tie return just the first hit encountered
+  group_by(geneID, sample) %>%
+  slice_max(Score, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+samples_unique_genes_zeroes <- samples_no_dups %>%
+  # keep RPKGs of zero
+# make subject a factor
+  mutate(subject = factor(subject)) %>%
+# add capsule type (1,2,3,4, most proximal to most distal)
+  left_join(meta %>% select(samplename, Type, Set), 
+            by = c("sample" = "samplename")) %>%
+  #remove practice capsules found in subject 1 and others
+  filter(!Set %in% c(1,6,7,8,9,10,11,12,13)) %>%
+  # remove 7 samples that were resequenced (subject 4,    subject 3)
+  #keep sample with more mapped reads
+  filter(!sample %in% c("O17_1", "O19_1", "O21_1", "L23_1",     "K23_1", "M15_1", "M23_1")) %>%
+  # remove potentially contaminated capsules from analysis
+  filter(!sample %in% possible_contam$meta_samplename) %>%
+# filter for unique genes in each sample
+# want to keep gene domain with the highest score, if there is a tie return just the first hit encountered
+  group_by(geneID, sample) %>%
+  slice_max(Score, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+samples_in_coassemblies_no_hits <- meta %>% 
+  filter(samplename %in% setdiff(unique(samples_used$samplename), unique(samples_unique_genes_zeroes$sample)))
+# these are the samples that are from coassemblies with no hits (which are not the same as samples from coassemblies with hits but no reads mapping in the individual sample)
+```
+
+# Add a column to samples that has the single_closest_ref
+```{r}
+samples_unique_genes_with_names_no_2018 <- samples_unique_genes %>% filter(geneLoc %in% closest_ref_no_2018$hit_id) %>%
+  left_join(closest_ref_no_2018 %>% select(hit_id, single_closest_ref, distance),
+            by = c("geneLoc" = "hit_id")) %>% 
+  mutate(sample_type = ifelse(grepl("Stool", coassembly), "Stool", "Capsule"))
+
+saveRDS(samples_unique_genes_with_names_no_2018, file = paste0(dataDir, "/sensitivity/samples_unique_genes_with_names_no_2018.rds"))
+
+# df with RPKGs of zero 
+samples_unique_genes_with_names_no_2018_zeroes <- samples_unique_genes_zeroes %>% filter(geneLoc %in% closest_ref_no_2018$hit_id) %>%
+  left_join(closest_ref_no_2018 %>% select(hit_id, single_closest_ref, distance),
+            by = c("geneLoc" = "hit_id")) %>% 
+  mutate(sample_type = ifelse(grepl("Stool", coassembly), "Stool", "Capsule"))
+
+saveRDS(samples_unique_genes_with_names_no_2018_zeroes, file = paste0(dataDir, "/sensitivity/samples_unique_genes_with_names_no_2018_zeroes.rds"))
+```
+
+## for the asr genes 
+```{r}
+asr <- read_tsv(paste0(abundanceDirASR, "/concat_asrABC_Abundances_RPKG_redo.txt")) %>%
+  mutate(subject=as.numeric(str_extract(.$coassembly, "\\d+")))  %>% 
+  mutate(sample_type = ifelse(grepl("Stool", coassembly), "Stool", "Capsule"))
+
+# filter and remove duplicate genes
+asr_unique_cluster <- asr %>%
+  # Remove RPKGs of 0 (feature counts keeps genes even when nothing has mapped to them) 
+  filter(RPKG>0) %>%
+  mutate(subject = factor(subject)) %>%
+# add capsule type
+  left_join(meta %>% select(samplename, Type, Set), 
+            by = c("sample" = "samplename")) %>%
+  #remove practice capsules found in subject 1
+  filter(!Set %in% c(1,6,7,8,9,10,11,12,13)) %>%
+  # remove 7 samples that were resequenced (subject 4,    subject 3)
+  #keep sample with more mapped reads
+  filter(!sample %in% c("O17_1", "O19_1", "O21_1", "L23_1",     "K23_1", "M15_1", "M23_1")) %>%
+  # remove samples with possible contamination
+  filter(!sample %in% possible_contam$meta_samplename) %>%
+# filter for unique genes in each sample
+# want to keep gene domain with the highest score, if there is a tie return just the first hit encountered
+  group_by(geneID, sample) %>%
+  slice_max(Score, n = 1, with_ties = FALSE) %>%
+  ungroup() 
+
+# filtering by geneID leaves different genes with the same geneNum/locations, and you end up with more than 3 hits for each contig
+
+saveRDS(asr_unique_cluster, file = paste0(dataDir, "/sensitivity/asr_unique_cluster.rds"))
+```
+
+
+## Trees file
+```{r}
+rm(list = ls())
+```
+# Read in packages, functions, and directories
+```{r}
+source(paste0(here::here(), "/1-Config/config.R"))
+```
+
+# get tree
+```{r}
+ref_tree_2015 <- read.tree(paste0(raxmlDir, "/RAxML_originalLabelledTree_noBootstrap_no_2018_capsule.newick"))
+rooted_ref_tree_2015 <- root(ref_tree_2015, c("Moorella_thermoacetica_Y72_copy_2__MooTher5"), r = TRUE)
+```
+
+# get names of closest references and filter to remove gene duplicates
+```{r}
+## 2015 only 
+closest_ref_2015 <- read_csv(paste0(dataDir, "closestRefInfo_allScoreThresholdHits_wSingleClosestRef_no_2018_capsule.csv"))
+
+# read in df that filters out gene duplicates in each sample (selects the domain with the highest bit score) 
+# this df is made in dm_abundance.Rmd
+samples_unique_genes_with_names_2015 <- readRDS(paste0(dataDir, "/sensitivity/samples_unique_genes_with_names_no_2018.rds"))
+
+# manually select a subunit for the 6 contigs found in contigs_multiple_refs
+partial_genes <- c("Capsule_14.k141_153065_1", "Stool_14.k141_240693_1", "Stool_9.k141_270672_1")
+unknown_species <- c("Capsule_7.k141_250498_14", "Stool_7.k141_215370_50")
+# and rename 113757 to D. piger based on blast results
+
+samples_unique_subunit_manual <- samples_unique_genes_with_names_2015 %>%
+  filter(!geneNum %in% partial_genes) %>%
+  filter(!geneNum %in% unknown_species) %>%
+  mutate(single_closest_ref = ifelse(contig == "k141_113757", "Desulfovibrio_piger__DslPige3", single_closest_ref))
+
+# filter to get one subunit (8 are Moorella which is why there is 301 instead of 293 like in abundance_figures.rmd)
+samples_unique_subunit_RPKG_2015 <- samples_unique_subunit_manual %>%
+  group_by(contig, sample) %>%
+  slice_max(RPKG, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+# filter the closest_ref df to only have the unique gene hits
+# this df is much smaller since hits are not split up by sample
+closest_ref_filtered_2015 <- closest_ref_2015 %>%
+  filter(hit_id %in% samples_unique_subunit_RPKG_2015$geneLoc)
+```
+# get labels for the species 
+```{r}
+species_labels_2015 <- c("Desulfitibacter_alkalitolerans__DfiAlka2" = "italic(Desulfitibacter~alkalitolerans)",
+                    "Desulfovibrio_piger__DslPige3" = "italic(Desulfovibrio~piger~3)",
+                    "Desulfovibrio_piger__DslPige4" = "italic(Desulfovibrio~piger~4)",
+                    "Bilophila_wadsworthia__BilWads6" = "italic(Bilophila~wadsworthia~6)",
+                    "uncultured_bacterium__EF645667" = "uncultured~italic(Desulfovibrio)~species",
+                    "Bilophila_sp._4_1_30__BilSpec3" = "italic(Bilophila~species~3)",
+                    "Gordonibacter_pamelaeae__GrdPame5" = "italic(Gordonibacter~pamelaeae)",
+                    "Moorella_thermoacetica_Y72_copy_2__MooTher5" = "italic(Moorella~thermoacetica)")
+```
+
+
+# find the number of subjects that have a hit for a species
+```{r}
+## 2015
+subjects_per_species_2015 <- closest_ref_filtered_2015 %>%
+  # filter out hits that are too far from the closest reference
+  filter(distance < 2.5) %>%
+  # add variable for the subject
+  mutate(subject = str_split(biosample_id, "\\_", simplify = TRUE)[, 2]) %>%
+  # count the number of subjects that have a hit for each species
+  distinct(single_closest_ref, subject) %>%
+  group_by(single_closest_ref) %>%
+  summarize(n_subjects = n())
+
+subjects_per_species_2015$logFreq <- log2(subjects_per_species_2015$n_subjects + 1)
+
+```
+ 
+ 
+ 
+## full circular plots 
+```{r} 
+## 2015
+plot_2015 <- ggtree(rooted_ref_tree_2015, layout = "circular")
+
+(full_plot_2015 <- plot_2015 %<+%
+  subjects_per_species_2015 +
+  geom_tree(color = "black") +
+  geom_tippoint(aes(subset = label %in% subjects_per_species_2015$single_closest_ref), size = 2, color = "red", alpha = 0.8, position = "jitter") + 
+  scale_color_manual(
+    name = "Hits",
+    values = c(`TRUE` = "black", `FALSE` = "red"),
+    labels = c("Capsule or Stool sample", "No hits")
+  ))
+
+ggsave(paste0(figureDir, "sensitivity/capsule_tree_circular_2015.png"),
+       width = 16, height = 10, units = "in",   # increase for larger output
+       dpi = 600)
+```
+
+## 2015 clade trees
+```{r}
+firmicutes_node_2015 <- MRCA(rooted_ref_tree_2015, "Gordonibacter_pamelaeae__GrdPame5", "Polluted_aquifer_clone_LGWK16__UncS1633")
+firmicutes_subset_tree_2015 <- tree_subset(rooted_ref_tree_2015, firmicutes_node_2015, levels_back = 0)
+
+firmicutes_subset_tree_plot_2015 <- ggtree(firmicutes_subset_tree_2015, aes(color = label %in% subjects_per_species_2015$single_closest_ref))
+
+inset_firmicutes_2015 <- firmicutes_subset_tree_plot_2015 %<+%  
+  subjects_per_species_2015 +
+  aes(color = n_subjects) +
+  scale_color_gradient(low = "blue", high = "orange", 
+                       name = "Number of subjects with hits") +
+  geom_text_repel(aes(subset = label %in% subjects_per_species_2015$single_closest_ref,
+                    label = species_labels_2015[label]), 
+                  parse = TRUE,
+                  size = 3, 
+                  align = F, 
+                  hjust = -.85, 
+                  direction = "y", 
+                  force = 0.1, 
+                  box.padding = 0.1,
+                  segment.size = 0.25,
+                  segment.linetype = "dashed") +
+  theme(legend.position = "right",
+        plot.margin = margin(5, 10, 5, 5)) +  # Right margin for labels
+  hexpand(0.2, direction = 1)
+  
+inset_firmicutes_2015
+
+ggsave(paste0(figureDir, "sensitivity/capsule_tree_firmicutes_2015.png"),
+       width = 8, height = 4, units = "in",   # increase for larger output
+       dpi = 600)
+
+desulfovibionaceae_node_2015 <- MRCA(rooted_ref_tree_2015, "uncultured_bacterium__EF645666", "Desulfovibrio_desulfuricans__DslDes24")
+desulfovibrionaceae_subset_tree_2015 <- tree_subset(rooted_ref_tree_2015, desulfovibionaceae_node_2015, levels_back = 0)
+
+desulfo_subset_tree_plot_2015 <- ggtree(desulfovibrionaceae_subset_tree_2015, aes(color = label %in% subjects_per_species_2015$single_closest_ref)) 
+
+inset_desulfo_2015 <- desulfo_subset_tree_plot_2015 %<+%
+  subjects_per_species_2015 +
+  aes(color = n_subjects) +
+  scale_color_gradient(low = "blue", high = "orange", 
+                       name = "Number of subjects with hits",
+                       breaks = scales::pretty_breaks(n = 4),
+                       labels = scales::label_number(accuracy = 1)) +
+  geom_text_repel(aes(subset = label %in% subjects_per_species_2015$single_closest_ref,
+                    label = species_labels_2015[label]), 
+                  parse = TRUE,
+                  size = 3, 
+                  align = F, 
+                  hjust = -.85, 
+                  nudge_x = 0.15,
+                  direction = "y", 
+                  force = 0.1, 
+                  box.padding = 0.1,
+                  segment.size = 0.25,
+                  segment.linetype = "dashed") +
+  theme(legend.position = "right",
+        plot.margin = margin(5, 10, 5, 5)) +
+  hexpand(0.2, direction = 1)
+ 
+inset_desulfo_2015
+
+ggsave(paste0(figureDir, "sensitivity/capsule_tree_desulfovibrio_2015.png"),
+       width = 8, height = 4, units = "in",
+       dpi = 600)
+
+```
+
+## Abundance figures
+```{r}
+rm(list = ls())
+```
+# Read in packages, functions, and directories
+```{r}
+source(paste0(here::here(), "/1-Config/config.R"))
+```
+
+```{r}
+### Read in datasets from dm_abundance
+samples_unique_gene_casette <- readRDS(paste0(dataDir, "/sensitivity/samples_unique_genes_with_names_no_2018.rds"))
+samples_unique_gene_casette_zeroes <- readRDS(paste0(dataDir, "/sensitivity/samples_unique_genes_with_names_no_2018_zeroes.rds"))
+
+#looking to see which contigs are mapping to several species
+contigs_multiple_refs <- samples_unique_gene_casette %>%
+  group_by(contig) %>%
+  filter(n_distinct(single_closest_ref) > 1)%>%
+  # filter out contigs where multiple species are both Bilophila species or both D. piger; we don't care about these
+  # want to fix the contigs mapping to species that are farther apart on the tree
+  filter(!all(grepl("Bil|piger", single_closest_ref))) %>%
+  summarize(
+    n_refs = n_distinct(single_closest_ref),
+    refs = paste(unique(single_closest_ref), collapse = "; ")
+  )
+
+### choose a representative subunit
+
+# manually select a subunit for the 6 contigs found in contigs_multiple_refs
+partial_genes <- c("Capsule_14.k141_153065_1", "Stool_14.k141_240693_1", "Stool_9.k141_270672_1")
+unknown_species <- c("Capsule_7.k141_250498_14", "Stool_7.k141_215370_50")
+# and rename 113757 to D. piger based on blast results
+
+samples_unique_subunit_manual <- samples_unique_gene_casette %>%
+  filter(!geneNum %in% partial_genes) %>%
+  filter(!geneNum %in% unknown_species) %>%
+  mutate(single_closest_ref = ifelse(contig == "k141_113757", "Desulfovibrio_piger__DslPige3", single_closest_ref))
+
+samples_unique_subunit_manual_zeroes <- samples_unique_gene_casette_zeroes %>%
+  filter(!geneNum %in% partial_genes) %>%
+  filter(!geneNum %in% unknown_species) %>%
+  mutate(single_closest_ref = ifelse(contig == "k141_113757", "Desulfovibrio_piger__DslPige3", single_closest_ref))
+
+## value of 293 comes from this
+samples_unique_subunit_RPKG <- samples_unique_subunit_manual %>%
+  filter(single_closest_ref != "Moorella_thermoacetica_Y72_copy_2__MooTher5") %>%
+  group_by(contig, sample) %>%
+  slice_max(RPKG, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+## value of 361 comes from this 
+samples_unique_subunit_RPKG_zeroes <- samples_unique_subunit_manual_zeroes %>%
+  filter(single_closest_ref != "Moorella_thermoacetica_Y72_copy_2__MooTher5") %>%
+  group_by(contig, sample) %>%
+  slice_max(RPKG, n = 1, with_ties = FALSE) %>%
+  ungroup()
+```
+
+## get summary statistics for text
+```{r}
+# we want to know the number of unique hits in a coassembly (do not double-count contigs that show up in different samples)
+# choose one subunit per **coassembly**; this is accomplished by grouping by subject and contig
+unique_hits_summary <- samples_unique_gene_casette %>%
+  filter(single_closest_ref != "Moorella_thermoacetica_Y72_copy_2__MooTher5") %>%
+  group_by(subject, contig, sample_type) %>%
+  slice_max(RPKG, n = 1, with_ties = FALSE) %>%
+  # find the number of unique hits for each subject for stool and capsule
+  group_by(subject, sample_type) %>%
+  summarize(number_hits=n()) %>%
+  # take the median number of unique contigs in subjects for each sample type
+  group_by(sample_type) %>%
+  summarize(n_hits_total=sum(number_hits), median_hits=median(number_hits), q_25=quantile(number_hits, probs=0.25), q_75=quantile(number_hits, probs=0.75))
+```
+
+## get summary statistics for Table 1
+```{r}
+capsule_type_summary <- samples_unique_subunit_RPKG %>%
+  # find the number of genes in each sample and the sum of their RPKGs
+  group_by(sample, subject, Type) %>%
+  summarise(n_genes = n(), 
+            total_RPKG = sum(RPKG)) %>%
+  ungroup() %>% 
+  # find the median number of genes and median RPKG sum for all of the samples for a given subject and Type
+  # need this center chunk because different subjects have different numbers of samples!
+  group_by(subject, Type) %>%
+  summarise(n_median = median(n_genes),
+            median_total_RPKG = median(total_RPKG)) %>%
+  ungroup() %>%
+  # find the median number of genes and median RPKG sum for each Type
+  group_by(Type) %>% 
+  summarise(n_subjects=n_distinct(subject),
+            n_median_all_subj = round(median(n_median),2),
+            n_25pct = round(quantile(n_median, probs = 0.25),2),
+            n_75pct = round(quantile(n_median, probs = 0.75),2),
+            median_RPKG_all_subj = round_tidy(median(median_total_RPKG),2),
+            RPKG_25pct = round_tidy(quantile(median_total_RPKG, probs = 0.25),2),
+            RPKG_75pct = round_tidy(quantile(median_total_RPKG, probs = 0.75),2)) %>% 
+  mutate(n_genes_per_sample = paste0(n_median_all_subj, " [IQR ", n_25pct, "-", n_75pct, "]"),
+         median_RPKG_sum_per_sample = paste0(median_RPKG_all_subj, " [IQR ", RPKG_25pct, "-", RPKG_75pct, "]")) %>%
+  select(Type, n_subjects, n_genes_per_sample, median_RPKG_sum_per_sample)
+```
+
+
+```{r}
+# from data management Rmd; all samples of each type
+n_samples_all_by_type <- readRDS(paste0(dataDir, "sensitivity/number_samples_type.RDS")) %>%
+  rename(n_samples_total=n_samples)
+
+# positive samples of each type
+n_samples_pos <- samples_unique_subunit_RPKG %>%
+  group_by(Type) %>%
+  summarize(n_samples_pos=n_distinct(sample))
+# add up capsule numbers to get value for Table 1 caption
+sum((n_samples_pos %>% filter(str_detect(Type, "Capsule")))$n_samples_pos)
+
+# making a new summary to also include the number of samples for each type and percentages of samples/subjects that are positive
+capsule_type_summary_new <- n_samples_pos %>% 
+  left_join(n_samples_all_by_type, by = "Type") %>%
+  left_join(capsule_type_summary, by = "Type") %>%
+  mutate(pct_pos_samples = n_samples_pos/n_samples_total,
+         pct_pos_subjects = n_subjects/15) %>%
+  mutate(n_samples_pos = paste0(n_samples_pos, " (", percent(pct_pos_samples, accuracy = 0.01), ")"),
+         n_subjects = paste0(n_subjects,    " (", percent(pct_pos_subjects, accuracy = 0.01), ")")) %>%
+  select(-c(pct_pos_samples, pct_pos_subjects))
+         
+```
+
+# color palettes for plots
+```{r}
+# Generate a viridis palette with 20 colors
+viridis_palette <- viridis(20)
+viridis_palette
+
+boxplot_colors <- c(viridis_palette[6], viridis_palette[16])
+
+jitter_colors <- c("#4477AA", "#59A075", "#AA3377", "#DDAA33", "#6F7042")
+
+species_colors <- c("#40B0A6", "#E1BE6A")
+species_colors_full <- c("#40B0A6", "#E1BE6A", "#A290F3", "#E86A33", "#C80DCB")
+
+
+# #set 3+5 are after dinner and 2+4 are afternoon
+# set_colors <- c("#fd8d3c", "light sky blue", "#d94701", "navy", "#6F7042")
+```
+
+# Change closest ref labels
+```{r}
+species <- unique(samples_unique_subunit_RPKG$single_closest_ref)
+
+species_labels <- c("Desulfitibacter_alkalitolerans__DfiAlka2" = "Desulfitibacter alkalitolerans",
+                    "Desulfovibrio_piger__DslPige3" = "Desulfovibrio piger 3",
+                    "Desulfovibrio_piger__DslPige4" = "Desulfovibrio piger 4",
+                    "Bilophila_wadsworthia__BilWads6" = "Bilophila wadsworthia 6",
+                    "uncultured_bacterium__EF645667" = "uncultured Desulfovibrio species",
+                    "Bilophila_sp._4_1_30__BilSpec3" = "Bilophila species 3",
+                    "Gordonibacter_pamelaeae__GrdPame5" = "Gordonibacter pamelaeae",
+                    "Moorella_thermoacetica_Y72_copy_2__MooTher5" = "Moorella thermoacetica",
+                    "Anaerobic_bacterium_sk.prop8__Bv2Prop2" = "Anaerobic bacterium")
+
+species_labels_combine_species <- c("Desulfitibacter_alkalitolerans__DfiAlka2" = "italic(Desulfitibacter~alkalitolerans)",
+                    "Desulfovibrio_piger" = "italic(Desulfovibrio~piger)",
+                    "Bilophila_species" = "italic(Bilophila)~species",
+                    "uncultured_bacterium__EF645667" = "uncultured~italic(Desulfovibrio)~species",
+                    "Gordonibacter_pamelaeae__GrdPame5" = "italic(Gordonibacter~pamelaeae)",
+                    "Moorella_thermoacetica_Y72_copy_2__MooTher5" = "italic(Moorella~thermoacetica)",
+                    "Anaerobic_bacterium_sk.prop8__Bv2Prop2" = "'Anaerobic bacterium'")
+```
+
+
+# plot RPKG for unique genes (each hit would be one subunit) in each sample to compare between location; facet by species
+# this plot combines the two D. piger and two B. wadsworthia species
+```{r}
+samples_unique_subunit_RPKG %>%
+  mutate(combine_species = case_when(
+    single_closest_ref %in% c("Desulfovibrio_piger__DslPige3", "Desulfovibrio_piger__DslPige4") ~ "Desulfovibrio_piger",
+    single_closest_ref %in% c("Bilophila_wadsworthia__BilWads6", "Bilophila_sp._4_1_30__BilSpec3") ~ "Bilophila_species",
+    TRUE ~ single_closest_ref)) %>%
+  mutate(combine_species = factor(combine_species, 
+                                  levels = c("uncultured_bacterium__EF645667",
+                                            "Desulfovibrio_piger",
+                                            "Bilophila_species",
+                                            "Desulfitibacter_alkalitolerans__DfiAlka2",
+                                            "Gordonibacter_pamelaeae__GrdPame5"))) %>%
+  mutate(combine_species = recode(combine_species, !!!species_labels_combine_species)) %>%
+  # order subjects based on heatmap order
+  mutate(subject = factor(subject, levels = c("12", "9", "14", "2", "13", "7", "3", "6", "4", "11", "1"))) %>%
+  ggplot(aes(x = Type, y = log10(RPKG))) +
+  geom_boxplot(color = "black",
+               position = position_dodge(width = 0.8), size = 0.8, outlier.shape = NA) +
+  geom_jitter(aes(color = Type),
+            alpha = 1.6,
+            position = position_jitterdodge(
+        jitter.width = 0.5,
+        dodge.width = 0.8)) +
+  scale_color_manual(values = jitter_colors) +
+  #get rid of box fill
+  scale_fill_manual(values = c("transparent", "transparent", "transparent", "transparent", "transparent"), guide = "none") +
+  guides(fill = "none") +
+  guides(
+    color = guide_legend(
+      override.aes = list(size = 4)
+    )) +
+  facet_wrap(~ combine_species, 
+             #scale = "free_y",
+             labeller = labeller(combine_species = label_parsed)) +
+  labs(
+    title = expression(paste(italic("dsrAB"), " gene cluster abundance across species by type")),
+    x = "Type",
+    y = "log10(RPKG)",
+    color = "Type"
+  ) +
+  theme_bw() +
+  theme(
+    strip.background = element_blank(),
+    strip.text = element_text(size = 14),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text.x = element_text(size = 14, angle = 60, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    plot.title = element_text(size = 20, hjust = 0.5)
+  )
+#ggsave("dsrAB_RPKM_combine_species_free_y_axis.png",
+ggsave(paste0(figureDir, "sensitivity/dsrAB_RPKG_combine_species.png"),
+       width = 18, height = 14, units = "in",   # increase for larger output
+       dpi = 600)
+
+```
+## SUPP. FIG. 4
+```{r}
+# plot_capsule_differences <- samples_unique_subunit_RPKG %>%
+#   filter(!Type == "Stool") %>%
+#   filter(!single_closest_ref %in% c("uncultured_bacterium__EF645667","Desulfitibacter_alkalitolerans__DfiAlka2")) %>%
+#   mutate(combine_species = case_when(
+#     single_closest_ref %in% c("Desulfovibrio_piger__DslPige3", "Desulfovibrio_piger__DslPige4") ~ "Desulfovibrio_piger",
+#     single_closest_ref %in% c("Bilophila_wadsworthia__BilWads6", "Bilophila_sp._4_1_30__BilSpec3") ~ "Bilophila_species",
+#     TRUE ~ single_closest_ref)) %>%
+#   mutate(combine_species = factor(combine_species, 
+#                                   levels = c("Desulfovibrio_piger",
+#                                             "Bilophila_species",
+#                                             "Gordonibacter_pamelaeae__GrdPame5"))) %>%
+#   mutate(combine_species = recode(combine_species, !!!species_labels_combine_species)) %>%
+#   group_by(subject, Type, combine_species) %>%
+#   summarize(sum_RPKG_per_1000=sum(RPKG)*1000, .groups = "drop")
+
+#make this plot with median sums across a subjects' capsule ones, twos, etc.
+plot_capsule_differences <- samples_unique_subunit_RPKG %>%
+  filter(!Type == "Stool") %>%
+  filter(!single_closest_ref %in% c("uncultured_bacterium__EF645667","Desulfitibacter_alkalitolerans__DfiAlka2")) %>%
+  mutate(combine_species = case_when(
+    single_closest_ref %in% c("Desulfovibrio_piger__DslPige3", "Desulfovibrio_piger__DslPige4") ~ "Desulfovibrio_piger",
+    single_closest_ref %in% c("Bilophila_wadsworthia__BilWads6", "Bilophila_sp._4_1_30__BilSpec3") ~ "Bilophila_species",
+    TRUE ~ single_closest_ref)) %>%
+  group_by(sample, subject, Type, combine_species) %>%
+  summarize(sum_RPKG=sum(RPKG), .groups = "drop") %>%
+  group_by(subject, Type, combine_species) %>%
+  summarize(median_RPKG=median(sum_RPKG), .groups = "drop")
+  
+# how many subjects included in this plot?
+n_distinct(plot_capsule_differences$subject)
+
+# which species are present in each subject
+subject_species <- plot_capsule_differences %>%
+  select(-Type) %>%
+  distinct(subject, combine_species)
+
+# adding manual zeroes for the capsules where a subject's species was not detected
+plot_capsule_differences_complete <- plot_capsule_differences %>% 
+  complete(subject, Type, combine_species, fill = list(median_RPKG = 0)) %>%
+  semi_join(subject_species, by = c("subject", "combine_species")) %>%
+  mutate(combine_species = factor(combine_species, 
+                                  levels = c("Desulfovibrio_piger",
+                                            "Bilophila_species",
+                                            "Gordonibacter_pamelaeae__GrdPame5"))) %>%
+  mutate(combine_species = recode(combine_species, !!!species_labels_combine_species))
+  
+  
+
+ggplot(plot_capsule_differences_complete, 
+       aes(x = Type, y = log10(median_RPKG + 0.0001), group = subject)) +
+  geom_point(size = 2, alpha = 0.8, col = "gray60") +
+  geom_line(alpha = 0.4, col = "gray60") +  # connects same subject across capsule types
+  facet_wrap(~ combine_species, nrow = 1, labeller = label_parsed) +
+  labs(x = "Capsule Type", 
+       y = expression(italic(dsrAB) ~ "abundance" ~ (log[10]*"(RPKG + 0.0001)"))) +
+  theme_bw() + 
+  theme(
+    strip.background = element_blank(),
+    strip.text = element_text(size = 14),
+    #legend.text = element_text(size = 14),
+    #legend.title = element_text(size = 14),
+    axis.text.x = element_text(size = 14, angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    plot.title = element_text(size = 20, hjust = 0.5)
+  )
+ggsave(paste0(figureDir, "sensitivity/RPKG_across_capsules.png"),
+       width = 12, height = 8, units = "in",   # increase for larger output
+       dpi = 600)
+```
+# any differences in RPKG across capsules?
+```{r}
+# test this out with splitting by set rather than taking the median 
+plot_capsule_differences_set <- samples_unique_subunit_RPKG %>%
+  filter(!Type == "Stool") %>%
+  filter(!single_closest_ref %in% c("uncultured_bacterium__EF645667","Desulfitibacter_alkalitolerans__DfiAlka2")) %>%
+  mutate(combine_species = case_when(
+    single_closest_ref %in% c("Desulfovibrio_piger__DslPige3", "Desulfovibrio_piger__DslPige4") ~ "Desulfovibrio_piger",
+    single_closest_ref %in% c("Bilophila_wadsworthia__BilWads6", "Bilophila_sp._4_1_30__BilSpec3") ~ "Bilophila_species",
+    TRUE ~ single_closest_ref)) %>%
+  mutate(combine_species = factor(combine_species, 
+                                  levels = c("Desulfovibrio_piger",
+                                            "Bilophila_species",
+                                            "Gordonibacter_pamelaeae__GrdPame5"))) %>%
+  mutate(combine_species = recode(combine_species, !!!species_labels_combine_species)) %>%
+  group_by(sample, subject, Type, combine_species, Set) %>%
+  summarize(sum_RPKG=sum(RPKG), .groups = "drop")
+
+model_df <- plot_capsule_differences_set %>% 
+  mutate(log_abundance = log10(sum_RPKG))
+
+# look at distribution of transformed abundances
+(ggplot(model_df, aes(x=log_abundance)) + geom_histogram() + facet_wrap(~combine_species))
+
+model <- lmerTest::lmer(log_abundance ~ Type + combine_species + (1|subject/Set), 
+              data = model_df)
+anova(model)
+
+```
+
+
+## sampling variability for subject 9 FIGURE 4
+```{r}
+plot_subj9 <- samples_unique_subunit_RPKG %>%
+  filter(!Set %in% c(1,6,7,8,9,10,11,12,13)) %>%
+  filter(subject == 9 ) %>%
+  mutate(combine_species = case_when(
+    single_closest_ref %in% c("Desulfovibrio_piger__DslPige3", "Desulfovibrio_piger__DslPige4") ~ "Desulfovibrio_piger",
+    single_closest_ref %in% c("Bilophila_wadsworthia__BilWads6", "Bilophila_sp._4_1_30__BilSpec3") ~ "Bilophila_species",
+    TRUE ~ single_closest_ref))
+
+# this adds manual zeros for the contigs present in the coassembly but not found in a certain set/capsule type
+plot_subj9_complete <- plot_subj9 %>%
+  filter(Type != "Stool") %>%
+  select(contig, Set, Type, RPKG) %>%
+  pivot_wider(names_from = contig, values_from = RPKG) %>%
+  pivot_longer(cols = -c(Set, Type), 
+               names_to = "contig", values_to = "RPKG") %>%
+  left_join(plot_subj9 %>% filter(Type != "Stool") %>% select(contig, Set, Type, combine_species), 
+            by = c("contig", "Set", "Type")) %>%
+  # add species to the two NAs
+  mutate(combine_species = ifelse(contig == "k141_198101", "Bilophila_species", combine_species)) %>%
+  #bind_rows(plot_subj9 %>% select(contig, Set, Type, combine_species, RPKG) %>% filter(Type=="Stool")) %>%
+  mutate(combine_species = factor(combine_species, 
+                                  levels = c("Desulfovibrio_piger",
+                                            "Bilophila_species"))) %>%
+  mutate(combine_species = recode(combine_species, !!!species_labels_combine_species)) %>%
+  mutate(RPKG = replace_na(RPKG, 0))
+  
+ggplot(plot_subj9_complete,
+       aes(x = Set, y = log10(RPKG+.0001), group = interaction(Type, contig), color = combine_species)) + 
+  geom_point() + 
+  geom_line() + 
+  facet_wrap(~Type, nrow = 1, scale = "free_x") +
+  scale_color_manual(values = species_colors, labels = function(x) parse(text = x)) +
+  labs(
+    title = expression(paste(italic("dsrAB"), " gene cluster abundance across sampling events")),
+    y = expression(italic(dsrAB) ~ "abundance" ~ (log[10]*"(RPKG + .0001)")),
+    color = "Species"
+  ) +
+  theme_bw() +
+  scale_x_discrete(labels = c("2" = "Afternoon", 
+                             "3" = "Evening",
+                             "4" = "Afternoon", 
+                             "5" = "Evening")) +
+  theme(
+    strip.background = element_blank(),
+    strip.text = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 16),
+    plot.title = element_text(size = 20, hjust = 0.5)
+  )
+
+ggsave(paste0(figureDir, "sensitivity/sample_variability.png"),
+       width = 12, height = 6, units = "in",   # increase for larger output
+       dpi = 600)
+
+```
+
+# sample variability for all subjects
+```{r}
+plot_subj_var <- samples_unique_subunit_RPKG %>%
+  filter(!Set %in% c(1,6,7,8,9,10,11,12,13)) %>%
+  filter(subject %in% c(2,4,7,12,14)) %>%
+  filter(!sample_type == "Stool") %>%
+  mutate(combine_species = case_when(
+    single_closest_ref %in% c("Desulfovibrio_piger__DslPige3", "Desulfovibrio_piger__DslPige4") ~ "Desulfovibrio_piger",
+    single_closest_ref %in% c("Bilophila_wadsworthia__BilWads6", "Bilophila_sp._4_1_30__BilSpec3") ~ "Bilophila_species",
+    TRUE ~ single_closest_ref)) 
+
+contig_species_subject <- plot_subj_var %>%
+  distinct(contig, combine_species, subject)
+
+# this adds manual zeros for the contigs present in a coassembly but not found in a certain set/capsule type
+plot_subj_var_complete <- plot_subj_var %>%
+  select(contig, Set, Type, RPKG) %>%
+  pivot_wider(names_from = contig, values_from = RPKG) %>%
+  pivot_longer(cols = -c(Set, Type), 
+               names_to = "contig", values_to = "RPKG") %>%
+  left_join(plot_subj_var %>% filter(Type != "Stool") %>% select(contig, Set, Type, combine_species), 
+            by = c("contig", "Set", "Type")) %>%
+  # add species for the points with RPKG=NA
+  left_join(contig_species_subject, by = "contig") %>%
+  select(-combine_species.x) %>%
+  rename(combine_species = combine_species.y) %>%
+  mutate(combine_species = factor(combine_species, 
+                                  levels = c("Desulfovibrio_piger", 
+                                            "Bilophila_species",
+                                            "uncultured_bacterium__EF645667",
+                                            "Desulfitibacter_alkalitolerans__DfiAlka2",
+                                            "Gordonibacter_pamelaeae__GrdPame5"))) %>%
+  mutate(combine_species = recode(combine_species, !!!species_labels_combine_species)) %>%
+  mutate(RPKG = replace_na(RPKG, 0))
+
+ggplot(plot_subj_var_complete,
+       aes(x = Set, y = log10(RPKG+.0001), group = interaction(Type, contig), color = combine_species)) + 
+  geom_point() + 
+  geom_line() + 
+  facet_grid(subject~Type, scale = "free_x",
+             labeller = labeller(subject = function(x) paste("Subject", x))) +
+  scale_color_manual(values = species_colors_full, labels = function(x) parse(text = x)) +
+  labs(
+    title = expression(paste(italic("dsrAB"), " gene cluster abundance across sampling events")),
+    y = expression(italic(dsrAB) ~ "abundance" ~ (log[10]*"(RPKG + .0001)")),
+    color = "Species"
+  ) +
+  theme_bw() +
+  scale_x_discrete(labels = c("2" = "Afternoon", 
+                             "3" = "Evening",
+                             "4" = "Afternoon", 
+                             "5" = "Evening")) +
+  theme(
+    strip.background = element_blank(),
+    strip.background.y = element_rect(fill = "grey85", color = NA),
+    strip.text = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 16),
+    plot.title = element_blank()
+  )
+
+ggsave(paste0(figureDir, "sensitivity/sample_variability_all.png"),
+       width = 12, height = 8, units = "in",   # increase for larger output
+       dpi = 600)
+```
+
+
+# HEATMAP FIGURE 4B
+# Heatmap for capsule vs stool 
+# in one plot
+# Claude AI used for help in generating code to split heatmap cells
+```{r}
+# testing corrected version 
+RPKG_by_sample_type_MEDIAN <- samples_unique_subunit_RPKG %>%
+  # combine d. piger and bilophila species
+  mutate(combine_species = case_when(
+    single_closest_ref %in% c("Desulfovibrio_piger__DslPige3", "Desulfovibrio_piger__DslPige4") ~ "Desulfovibrio_piger",
+    single_closest_ref %in% c("Bilophila_wadsworthia__BilWads6", "Bilophila_sp._4_1_30__BilSpec3") ~ "Bilophila_species",
+    TRUE ~ single_closest_ref)) %>%
+  mutate(subject_sample_type=paste(subject,sample_type, sep = "_")) %>%
+  group_by(sample, subject_sample_type, combine_species) %>%
+  summarize(sum_RPKG = sum(RPKG)) %>%
+  ungroup() %>%
+  group_by(subject_sample_type, combine_species) %>%
+  summarize(median_RPKG=median(sum_RPKG))%>%
+  pivot_wider(
+    names_from = combine_species,
+    values_from = median_RPKG,
+    values_fill = 0) %>%
+    column_to_rownames(., var = "subject_sample_type")
+
+
+# transform  
+# pseudocount because there are species with no hits for some samples. this also means that we can add zeroes for the 2 stool samples where there are no hits
+matrix_sample_type_log <- round(log10(RPKG_by_sample_type_MEDIAN+1),6) %>%
+  as.matrix()
+```
+# does d.piger or bilophila have a greater abundance across subjects in the stool? what about SI?
+```{r}
+RPKG_by_sample_type_MEDIAN %>%
+  filter(grepl("Stool", rownames(.)), Bilophila_species > 0) %>%
+  pull(Bilophila_species) %>%
+  mean()
+
+RPKG_by_sample_type_MEDIAN %>%
+  filter(grepl("Capsule", rownames(.)), Bilophila_species > 0) %>%
+  pull(Bilophila_species) %>%
+  mean()
+
+RPKG_by_sample_type_MEDIAN %>%
+  filter(grepl("Stool", rownames(.)), Desulfovibrio_piger > 0) %>%
+  pull(Desulfovibrio_piger) %>%
+  mean()
+RPKG_by_sample_type_MEDIAN %>%
+  filter(grepl("Capsule", rownames(.)), Desulfovibrio_piger > 0) %>%
+  pull(Desulfovibrio_piger) %>%
+  mean()
+
+# get number for results -> comparing average stool abundances for four subjects with either detected 
+RPKG_by_sample_type_MEDIAN %>%
+  filter(grepl("Stool", rownames(.)), Desulfovibrio_piger > 0) %>%
+  pull(Desulfovibrio_piger) %>%
+  mean()/RPKG_by_sample_type_MEDIAN %>%
+  filter(grepl("Stool", rownames(.)), Bilophila_species > 0) %>%
+  pull(Bilophila_species) %>%
+  mean()
+
+# subject 12 and subject 14 have d. piger and b. wadsworthia in both their SI and stool samples
+#sub_12_ratio 
+sub_12_ratio <- RPKG_by_sample_type_MEDIAN["12_Stool", "Desulfovibrio_piger"] / 
+        RPKG_by_sample_type_MEDIAN["12_Stool", "Bilophila_species"]
+#sub_14_ratio
+sub_14_ratio <- RPKG_by_sample_type_MEDIAN["14_Stool", "Desulfovibrio_piger"] / 
+        RPKG_by_sample_type_MEDIAN["14_Stool", "Bilophila_species"]
+
+(mean_ratio_piger_bil <- (sub_12_ratio+sub_14_ratio)/2)
+```
+# comparison of bilophila abundance in the SI to the stool
+```{r}
+bilophila_abun <- RPKG_by_sample_type_MEDIAN %>% 
+  select("Bilophila_species") %>%
+  rownames_to_column("subject_type") %>%
+  mutate(subject = str_extract(subject_type, "\\d+"),
+         type = str_extract(subject_type, "Capsule|Stool")) %>%
+  select(-subject_type) %>%
+  pivot_wider(names_from = type, values_from = Bilophila_species, values_fill = 0) %>%
+  mutate(ratio = Capsule / Stool)
+
+
+piger_abun <- RPKG_by_sample_type_MEDIAN %>% 
+  select("Desulfovibrio_piger") %>%
+  rownames_to_column("subject_type") %>%
+  mutate(subject = str_extract(subject_type, "\\d+"),
+         type = str_extract(subject_type, "Capsule|Stool")) %>%
+  select(-subject_type) %>%
+  pivot_wider(names_from = type, values_from = Desulfovibrio_piger, values_fill = 0) %>%
+  mutate(ratio = Capsule / Stool)
+
+pamelaeae_abun <- RPKG_by_sample_type_MEDIAN %>% 
+  select("Gordonibacter_pamelaeae__GrdPame5") %>%
+  rownames_to_column("subject_type") %>%
+  mutate(subject = str_extract(subject_type, "\\d+"),
+         type = str_extract(subject_type, "Capsule|Stool")) %>%
+  select(-subject_type) %>%
+  pivot_wider(names_from = type, values_from = Gordonibacter_pamelaeae__GrdPame5, values_fill = 0) %>%
+  mutate(ratio = Capsule / Stool)
+
+alkalitolerans_abun <- RPKG_by_sample_type_MEDIAN %>% 
+  select("Desulfitibacter_alkalitolerans__DfiAlka2") %>%
+  rownames_to_column("subject_type") %>%
+  mutate(subject = str_extract(subject_type, "\\d+"),
+         type = str_extract(subject_type, "Capsule|Stool")) %>%
+  select(-subject_type) %>%
+  pivot_wider(names_from = type, values_from = Desulfitibacter_alkalitolerans__DfiAlka2, values_fill = 0) %>%
+  mutate(ratio = Capsule / Stool)
+  
+```
+
+
+```{r}
+row_subjects_2 <- sapply(strsplit(rownames(matrix_sample_type_log), "_"), function(x) x[1])
+row_types_2 <- sapply(strsplit(rownames(matrix_sample_type_log), "_"), function(x) x[2])
+
+
+
+species_labels_combine_species_no_moorella <- c("uncultured_bacterium__EF645667" = "uncultured~italic(Desulfovibrio)~species",
+                    "Desulfovibrio_piger" = "italic(Desulfovibrio~piger)",
+                    "Bilophila_species" = "italic(Bilophila)~species",
+                    "Desulfitibacter_alkalitolerans__DfiAlka2" = "italic(Desulfitibacter~alkalitolerans)",
+                    "Gordonibacter_pamelaeae__GrdPame5" = "italic(Gordonibacter~pamelaeae)")
+col_labels_sample_type <- species_labels_combine_species_no_moorella[colnames(matrix_sample_type_log)]
+col_labels_sample_type_parsed <- parse(text = col_labels_sample_type)
+```
+
+```{r}
+# Create stool and capsule matrices
+matrix_capsule <- matrix_sample_type_log[row_types_2 == "Capsule", ]
+matrix_stool <- matrix_sample_type_log[row_types_2 == "Stool", ]
+
+# Make sure columns are in the same order for both
+common_cols <- intersect(colnames(matrix_capsule), colnames(matrix_stool))
+
+subjects_capsule <- sapply(strsplit(rownames(matrix_capsule), "_"), function(x) x[1])
+subjects_stool <- sapply(strsplit(rownames(matrix_stool), "_"), function(x) x[1])
+
+# Use capsule subjects as the complete list (since it has 2 extra subjects)
+all_subjects <- subjects_capsule
+
+# Stool matrix already matches capsule dimensions, just needs to be expanded
+n_cols <- ncol(matrix_capsule)
+
+# Initialize stool matrix with zeros for all capsule subjects
+matrix_stool_complete <- matrix(0, nrow = length(all_subjects), ncol = n_cols)
+rownames(matrix_stool_complete) <- all_subjects
+colnames(matrix_stool_complete) <- colnames(matrix_stool)
+
+# Fill in the stool values that exist
+for(i in 1:length(subjects_stool)) {
+  subject <- subjects_stool[i]
+  if(subject %in% all_subjects) {
+    matrix_stool_complete[subject, ] <- matrix_stool[i, ]
+  }
+}
+
+# Capsule matrix just needs subject names
+rownames(matrix_capsule) <- subjects_capsule
+
+# Now matrix_capsule and matrix_stool_complete have the same dimensions
+# with 0 for subjects that don't appear in stool
+
+# cluster the species and the subjects like the jitter box plot
+species_order <- names(species_labels_combine_species_no_moorella)
+subject_order <- c("9", "14", "2", "3", "12", "13", "7", "6", "4", "11", "1")
+
+matrix_capsule <- matrix_capsule[subject_order, species_order]
+matrix_stool_complete <- matrix_stool_complete[subject_order, species_order]
+
+# Color functions for each group (using same scale for stool and capsule)
+all_values <- c(as.vector(matrix_capsule), as.vector(matrix_stool_complete))
+min_val <- min(all_values[all_values > 0], na.rm = TRUE)
+# after removing the potentially contaminated samples, the medians increased
+max_val <- max(all_values[all_values < 0.1], na.rm = TRUE)
+
+col_fun <- colorRamp2::colorRamp2(seq(min_val, max_val, length.out = 10), 
+                        viridis(10, begin = 0.9, end = 0.2))
+
+# Create custom cell function to draw split cells
+cell_func_hm <- function(j, i, x, y, width, height, fill) {
+  # Get values from both groups
+  val1 <- matrix_capsule[i, j]
+  val2 <- matrix_stool_complete[i, j]
+  
+  # Draw left half (capsule)
+
+  fill1 <- if (val1 == 0) {
+      "white"
+  } else if (val1 > 0.1) {
+      "#440154"
+    } 
+    else {
+     col_fun(val1)
+   }
+  grid.rect(x = x - width/4, y = y, 
+            width = width/2, height = height,
+            gp = gpar(col = NA, lwd = 0.5, fill = fill1))
+  
+  
+  # Draw right half (stool)  
+  fill2 <- if (val2 == 0) {
+      "white"
+  } else if (val2 > 0.1) {
+      "#440154"
+    } 
+    else {
+      col_fun(val2)
+    }
+  grid.rect(x = x + width/4, y = y,
+            width = width/2, height = height,
+            gp = gpar(col = NA, lwd = 0.5, fill = fill2))
+ 
+  grid.rect(
+    x = x, y = y,
+    width = width, height = height,
+    gp = gpar(col = "white", lwd = 0.4, fill = NA))
+}
+
+# Prepare column labels
+col_labels_parsed_split <- parse(text = species_labels_combine_species_no_moorella[colnames(matrix_capsule)])
+```
+
+```{r}
+png(paste0(figureDir, "sensitivity/heatmap_split_median.png"), width = 8, height = 6, units = "in", res = 600)
+
+hm_split <- ComplexHeatmap::pheatmap(
+  matrix_capsule,  # Use capsule as base since it has the right # of subjects (colors handled by cell_fun)
+  cell_fun = cell_func_hm,
+  #col = viridis(10, begin = 0.9, end = 0.2),  # For legend
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+
+  show_rownames = TRUE,
+  show_colnames = TRUE,
+  angle_col = "45",
+  labels_col = col_labels_parsed_split,
+  fontsize_col = 9,
+  
+  show_row_dend = FALSE,
+  show_column_dend = FALSE,
+  legend = FALSE,
+  
+  #column_title = expression(paste(italic("dsrAB"), " gene cluster abundance across species by sample type")),
+  row_names_side = "left",
+  row_title = "Subject",
+  row_title_side = "left",
+  
+  border_color = "white"
+)
+
+legend_outlier <- Legend(labels = ">0.1000", title = expression(italic(dsrAB) ~ "abundance" ~ (log[10]*"(RPKG+1)")), 
+                      legend_gp = gpar(fill = "#440154"),
+                      grid_width = unit(0.4, "cm"))
+
+legend_zeroes <- Legend(labels = "0.0000", title = "",
+                   type = "points",
+                   pch = 22,  # filled square
+                   size = unit(5, "mm"),
+                   legend_gp = gpar(fill = "white", col = "black"),
+                   grid_width = unit(0.4, "cm"))
+
+legend_main <- Legend(
+  col_fun = col_fun,
+  at = seq(min_val, max_val, length.out = 5),
+  labels = sprintf("%.4f", seq(min_val, max_val, length.out = 5)),
+  legend_height = unit(4, "cm"),
+  grid_width = unit(0.4, "cm"))
+
+legend_all <- packLegend(legend_outlier, legend_main, legend_zeroes, 
+                          direction = "vertical",
+                          gap = unit(2, "mm"))
+
+draw(hm_split, heatmap_legend_side = "right", 
+     annotation_legend_list = list(legend_all),
+     merge_legends = TRUE,
+     padding = unit(c(5, 15, 5, 20), "mm"))
+
+dev.off()
+```
+
+
+## ASR figures
+```{r}
+rm(list = ls())
+```
+# Read in packages, functions, and directories
+```{r}
+source(paste0(here::here(), "/1-Config/config.R"))
+```
+
+# read in unique dsr clusters
+```{r}
+dsr_unique <- readRDS(paste0(dataDir, "/sensitivity/samples_unique_genes_with_names_no_2018.rds"))
+```
+
+```{r}
+asr_unique <- readRDS(paste0(dataDir, "/sensitivity/asr_unique_cluster.rds"))
+```
+
+# Making color palettes for plots
+```{r}
+# Generate a viridis palette with 20 colors
+viridis_palette <- viridis(20)
+viridis_palette
+
+boxplot_colors <- c(viridis_palette[6], viridis_palette[16])
+gene_colors <- c("#D98E21", "#6B8E23")
+sample_type_colors <- c("#AA3377", "#6F7042")
+sample_type_colors_2 <- c("#1E88E5", "#6F7042")
+
+jitter_colors <- c("#4477AA", "#59A075", "#AA3377", "#DDAA33", "#6F7042")
+```
+
+# get summary statistics for Figure 6A
+```{r}
+unique_hits_summary_dsr <- dsr_unique %>%
+  filter(single_closest_ref != "Moorella_thermoacetica_Y72_copy_2__MooTher5") %>%
+  # need to remove this partial gene because it was removed to make the other abundance figures and when it is removed, one sample is no longer in the df. This way, both the abundance figures and the asr/dsr figures will have 146 samples included in the analysis
+  filter(!geneNum == "Stool_14.k141_240693_1") %>%
+  # find unique contigs in each coassembly
+  # don't care about how we are selecting a subunit here since we just want overall count. RPKG will be in figure part b
+  group_by(subject, contig, sample_type) %>%
+  slice_max(RPKG, n = 1, with_ties = FALSE) %>%
+  ungroup %>%
+  # find how many contigs are in each capsule type and stool
+  group_by(subject, sample_type) %>%
+  summarize(number_hits=n()) %>%
+  group_by(sample_type) %>%
+  # add up all the hits found in each subject for a given Type. take the median and find IQR
+  summarize(n_hits_total=sum(number_hits), median_hits=median(number_hits), q_25=quantile(number_hits, probs=0.25), q_75=quantile(number_hits, probs=0.75)) %>%
+  mutate(hits_per_subj = paste0(median_hits, " [IQR ", q_25, "-", q_75, "]")) %>%
+  select(sample_type, n_hits_total, hits_per_subj)
+
+unique_hits_summary_asr <- asr_unique %>%
+  group_by(subject, contig, sample_type) %>%
+  slice_max(RPKG, n = 1, with_ties = FALSE) %>%
+  ungroup %>%
+  group_by(subject, sample_type) %>%
+  summarize(number_hits=n()) %>%
+  group_by(sample_type) %>%
+  summarize(n_hits_total=sum(number_hits), median_hits=median(number_hits), q_25=quantile(number_hits, probs=0.25), q_75=quantile(number_hits, probs=0.75)) %>%
+  mutate(hits_per_subj = paste0(median_hits, " [IQR ", q_25, "-", q_75, "]")) %>%
+  select(sample_type, n_hits_total, hits_per_subj)
+
+## for these, the dsr hits get filtered by dups, etc. 
+figure_6a <- unique_hits_summary_dsr %>% left_join(., unique_hits_summary_asr, by = "sample_type", suffix = c("_dsr", "_asr"))
+```
+
+# How do RPKGs compare to the dsrAB genes? 
+# Cannot plot total RPKG since asrABC protein has 3 subunits while dsrAB has 2.
+# Using median to account for this
+```{r}
+# Get median RPKG across contigs in each sample
+# then find the sum of RPKG in a sample
+plot_RPKG_dsr_median <- dsr_unique %>%
+  filter(single_closest_ref != "Moorella_thermoacetica_Y72_copy_2__MooTher5") %>%
+  # need to remove this partial gene because it was removed to make the other abundance figures and when it is removed, one sample is no longer in the df.
+  filter(!geneNum == "Stool_14.k141_240693_1") %>%
+  group_by(sample, contig, sample_type, subject, Type) %>%
+  summarize(n=n(), median_RPKG=median(RPKG)) %>%
+  ungroup() %>%
+  group_by(sample, subject, sample_type, Type) %>%
+  summarize(sum_RPKG=sum(median_RPKG)) 
+
+plot_RPKG_asr_median <- asr_unique %>%
+  group_by(sample, contig, sample_type, subject, Type) %>%
+  summarize(n=n(), median_RPKG=median(RPKG)) %>%
+  ungroup() %>%
+  group_by(sample, subject, sample_type, Type) %>%
+  summarize(sum_RPKG=sum(median_RPKG))
+```
+
+
+#box and jitter of both gene clusters
+```{r}
+# combine asr and dsr data
+all_genes <- bind_rows(
+  dsr = plot_RPKG_dsr_median,
+  asr = plot_RPKG_asr_median,
+  .id = "gene_cluster")
+
+# plot a box for each cluster for each type, facet by subject
+set.seed(125)
+all_genes %>%
+  #filter(subject==9) %>%
+  ggplot(aes(x = sample_type, y = log10(sum_RPKG), fill = gene_cluster)) +
+  geom_boxplot(color = "black",
+               position = position_dodge(width = 0.8),
+               width = 0.6,
+               outlier.shape = NA) +
+  # Jitter points with viridis colors
+  geom_jitter(aes(color = gene_cluster),
+              alpha = 0.8, 
+              size = 1.6,
+              position = position_jitterdodge(jitter.width = 0.15, jitter.height = 3, dodge.width = 0.8)) +
+  scale_color_manual(values = gene_colors, labels = c(expression(italic(asrABC)), expression(italic(dsrAB)))) +
+  scale_fill_manual(values = c("transparent", "transparent"), guide = "none") +
+  guides(fill = "none") +
+  facet_wrap(~ subject, 
+             #scales = "free_y",
+             strip.position = "top",
+             labeller = labeller(subject = function(x) paste("Subject", x))) +
+  labs(
+    title = expression(paste("Abundances of ", italic(asrABC), " and ", italic(dsrAB), " across sample types and subjects")),
+    #subtitle = "Each point represents a sample",
+    x = "Sample type",
+    #median was taken across a contig to account for subunits
+    y = expression("Gene abundance" ~ (log[10]*"RPKG")),
+    color = "Gene cluster"
+  ) +
+  theme_bw() +
+  guides(
+    color = guide_legend(
+      override.aes = list(size = 5)
+    )) +
+  theme(
+    axis.text.x = element_text(size = 14, angle = 60, hjust = 1),
+    axis.text.y = element_text(size = 14),
+    axis.title.x = element_text(size = 20),
+    axis.title.y = element_text(size = 20),
+    legend.position = "right",
+    legend.text  = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    strip.placement = "outside",
+    strip.background = element_blank(),
+    strip.text.x = element_text(size = 12),
+    plot.title = element_text(size = 20, hjust = 0.5),
+    plot.subtitle = element_text(size = 14, hjust = 0.5))
+
+
+ggsave(paste0(figureDir, "sensitivity/median_RPKG_asrABC_v_dsrAB.png"),
+       width = 11, height = 8, units = "in",   # increase for larger output
+       dpi = 600)
+```
+
+#ratio plot figure 6B
+```{r}
+all_genes_subset <- all_genes %>%
+  group_by(sample) %>%
+  filter(all(c("dsr", "asr") %in% gene_cluster)) %>%
+  ungroup()
+
+plot_ratios <- all_genes_subset %>%
+  pivot_wider(names_from = gene_cluster, values_from = sum_RPKG) %>%
+  mutate(ratio_dsr_asr = dsr/asr) 
+
+summary_stats <- plot_ratios %>%
+  group_by(sample_type) %>%
+  summarise(median = round(median(ratio_dsr_asr),2),
+            n_25pct = round(quantile(ratio_dsr_asr, probs = 0.25),2),
+            n_75pct = round(quantile(ratio_dsr_asr, probs = 0.75),2))
+
+log_change <- plot_ratios %>%
+  mutate(log_ratio = log2(ratio_dsr_asr)) %>%
+  group_by(sample_type) %>%
+  summarize(min = min(log_ratio),
+            max = max(log_ratio))
+  
+
+set.seed(123)
+plot_ratios %>%
+  ggplot(aes(x = sample_type, y = log2(ratio_dsr_asr))) +
+  geom_boxplot(color = "black",
+               position = position_dodge(width = 0.8),
+               width = 0.6,
+               outlier.shape = NA) +
+  geom_jitter(aes(color = sample_type),
+              alpha = 0.8, 
+              size = 3,
+              position = position_jitterdodge(jitter.width = 0.15, jitter.height = 3, dodge.width = 0.8)) +
+  scale_color_manual(values = sample_type_colors) +
+  guides(
+    color = guide_legend(
+      override.aes = list(size = 5)
+    )) +
+  labs(
+    title = expression(paste("Comparing ", italic(dsrAB), " to ", italic(asrABC), " abundances in the small and large intestines")),
+    x = "Sample type",
+    y = expression(paste(log[2]*"(", italic(dsrAB), ":", italic(asrABC), ")")),
+    color = "Sample type"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(size = 14, angle = 60, hjust = 1),
+    axis.text.y = element_text(size = 14),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    legend.position = "right",
+    legend.text  = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    plot.title = element_text(size = 20, hjust = 0.5))
+
+ggsave(paste0(figureDir, "sensitivity/ratio_RPKG_asrABC_v_dsrAB.png"),
+       width = 11, height = 8, units = "in",   # increase for larger output
+       dpi = 600)
+  
+```
+```{r}
+# t test to see if there is a statistically significant difference in the median dsr:asr ratio between capsule and stool samples
+median_ratios <- plot_ratios %>%
+  group_by(subject, sample_type) %>%
+  summarize(median_ratio = median(ratio_dsr_asr))
+
+pp = median_ratios %>% 
+  # subjects 1 and 4 don't have dsr in stool
+  filter(!subject %in% c(1,4)) %>% 
+  dplyr::arrange(sample_type, subject) %>% 
+  pivot_wider(id_cols = subject, names_from = sample_type, values_from = median_ratio)
+
+t.test(pp$Capsule, pp$Stool, paired = TRUE)
+
+# cohen's d
+# adjust for small sample size
+effectsize::cohens_d(
+  pp$Capsule,
+  pp$Stool,
+  data=pp,
+  paired = TRUE,
+  adjust = TRUE,
+  ci = 0.95
+)
+
+```
+
