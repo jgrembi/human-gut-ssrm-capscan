@@ -14,6 +14,7 @@ Snakemake pipeline (cluster folder -> to be downloaded onto cluster and run via 
   2. cleanHitsCapsule.smk
   3. fragmentInsertionCapsule.smk
   4. getTreeInfoCapsule.smk
+  5. runHMMER_controls.smk : to make sure there are no SSRM hits for blank capsule controls
 - for gene abundances
   1. mapReads.smk: map raw reads to capsule/stool coassemblies and get reads per contig
   2. perGeneCounts.smk: get reads per gene and calculate RPKGs
@@ -31,8 +32,10 @@ Move into RStudio for data visualization
   3.  Analysis
        1. clustering_cooccur_prevalence.Rmd
             - go back to cluster and use ANI_for_clusters.smk to find ANI within clusters made in clustering_cooccur_prevalences.Rmd
-       3. tree_visualization_NCBI.Rmd
-       4. overall_prevalence_NCBI.Rmd
-       5. tree_visualization_capsule.Rmd
-       6. abundance_figures.Rmd
-       7. asr_abundance_figures.Rmd
+       2. tree_visualization_NCBI.Rmd
+       3. overall_prevalence_NCBI.Rmd
+       4. tree_visualization_capsule.Rmd
+       5. abundance_figures.Rmd
+       6. asr_abundance_figures.Rmd
+       7. capscan_contamination_check.Rmd
+            - analyzing whether removing **potentially** contaminated capsule samples changes results
