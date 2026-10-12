@@ -46,6 +46,7 @@ library(ggrepel)
 library(ggtext)
 library(lme4)
 library(lmerTest)
+library(scales)
 
 
 # fix conflicts between packages
@@ -85,3 +86,4 @@ microbeCensusDir = paste0(here::here(), "/0-Cluster/workflow/out/microbeCensus/"
 
 dataDir = paste0(here::here(), "/data/")
 figureDir = paste0(here::here(), "/4-Figures/")
+suppTableDir = paste0(here::here(), "/SupplementaryTables/")
