@@ -67,6 +67,12 @@ prevalence <- bind_rows(overall, under_3, over_3) %>%
 ```{r}
 infantgut_samples <- metadata_final %>%
   filter(notes == "InfantGut: Dynamics and Stabilization of the Human Gut Microbiome during the First Year of Life")
+# how many mother-child pairs? 
+table(infantgut_samples$under_over_3) 
+infant_gut_dyads <- infantgut_samples %>% mutate(subject_check = str_extract(Alias, "^[^_]+")) %>%
+  select(subject_check, Alias) %>%
+  group_by(subject_check) %>%
+  summarize(n_distinct(Alias))
   
 infantgut_prev <- hits_final_ages %>%
   filter(biosample_id %in% infantgut_samples$sample_id) 
@@ -368,11 +374,11 @@ study_PRJNA268964_prev <- hits_final_ages %>%
 ```{r}
 depth_prev <- read_xlsx(path = paste0(suppTableDir, "ssrm_suppTables.xlsx"), sheet = "SuppTable4", range = "A1:J29") %>%
   mutate(
-    qc_status = str_extract(`Depth in Gnt, pre- or post-"QC" (trim, human-reads removal, etc.)`, "(?<=\\()(pre|post)(?=-QC\\))"),
-    depth_Gnt = as.numeric(str_remove(`Depth in Gnt, pre- or post-"QC" (trim, human-reads removal, etc.)`, "\\s*\\(.*\\)"))
+    qc_status = str_extract(`Depth in Gb, pre- or post-"QC" (trim, human-reads removal, etc.)`, "(?<=\\()(pre|post)(?=-QC\\))"),
+    depth_Gb = as.numeric(str_remove(`Depth in Gb, pre- or post-"QC" (trim, human-reads removal, etc.)`, "\\s*\\(.*\\)"))
   )
 
-depth_prev_plot <- ggplot(depth_prev, aes(x = depth_Gnt, y = `Sample SSRM prevalence`, color = `Age category (under or over 3)`)) +
+depth_prev_plot <- ggplot(depth_prev, aes(x = depth_Gb, y = `Sample SSRM prevalence`, color = `Age category (under or over 3)`)) +
   geom_point(size = 3, alpha = 0.8) +
   labs(
     x = "Sequencing depth (Gigabases)",
@@ -394,9 +400,30 @@ under_3_study <- hits_final_ages %>%
   summarize(n_biosamples_hits = n()) %>%
   left_join(metadata_final, by = c("biosample_id"="sample_id"))
 ```
+# looking at age spread under 3 years
+```{r}
+diabimmune <- metadata_final %>% 
+  filter(str_detect(notes, "DIABIMMUNE")) %>%
+  mutate(age_group = case_when(
+    as.numeric(`host age`) <= 364 ~ "0-1",
+    as.numeric(`host age`) <= 729 ~ "1-2",
+    as.numeric(`host age`) >= 730 ~ "2+")) %>%
+  count(age_group)
 
+#from Backhed et al. 2015 supp. table 1; child ages at 12m sampling time point
+infantgut <- as.numeric(c(380,363,363,369,366,409,359,369,369,376,364,364,374,367,375,364,366,372,364,366,
+               371,359,369,374,378,365,367,378,354,366,369,361,357,360,396,381,377,371,365,358,
+               362,385,363,372,371,367,373,366,385,364,364,364,376,372,380,372,370,371,365,361,
+               360,364,364,358,360,367,367,371,355,364,372,352,372,353,363,365,365,357,358,359,
+               358,369,351,380,362,376,367,368,366,364,361,368,360,365,367,398,371,359))
+sum(infantgut>=365)
+
+```
 # make plot of under 3 age distribution
 ```{r}
+n_distinct(study_PRJNA290380$`host subject id`)
+
+# from diabimmune result in chunk above
 under_three_distribution <- data.frame(
   age_bin = c("0-1", "1-2", "2-3"),
   n_total = c(266,376,95)
@@ -415,7 +442,7 @@ hits_per_bin <- hits_final_ages %>%
 
 #SAMN04161035 is 0-1
 hits_per_bin_w_age <- hits_per_bin %>%
-  left_join((metadata_final %>% select(c(sample_id,`host age`))), by = c("biosample_id"="sample_id")) %>%
+  left_join((metadata_final %>% select(c(sample_id,`host age`, `host subject id`))), by = c("biosample_id"="sample_id")) %>%
   mutate(age_bin = case_when(
     is.na(`host age`) ~ "0-1",
     as.numeric(`host age`) <= 364 ~ "0-1",
@@ -514,26 +541,6 @@ hits_desulfo <- hits_final_ages %>%
 (prev_desulfo <- n_distinct(hits_desulfo)/n_distinct(hits_final_ages))
 
 (prev_firmicute + prev_desulfo)
-
-```
-
-# looking at age spread under 3 years
-```{r}
-diabimmune <- metadata_final %>% 
-  filter(str_detect(notes, "DIABIMMUNE")) %>%
-  mutate(age_group = case_when(
-    as.numeric(`host age`) <= 364 ~ "0-1",
-    as.numeric(`host age`) <= 729 ~ "1-2",
-    as.numeric(`host age`) >= 730 ~ "2+")) %>%
-  count(age_group)
-
-#from Backhed et al. 2015 supp. table 1; child ages at 12m sampling time point
-infantgut <- as.numeric(c(380,363,363,369,366,409,359,369,369,376,364,364,374,367,375,364,366,372,364,366,
-               371,359,369,374,378,365,367,378,354,366,369,361,357,360,396,381,377,371,365,358,
-               362,385,363,372,371,367,373,366,385,364,364,364,376,372,380,372,370,371,365,361,
-               360,364,364,358,360,367,367,371,355,364,372,352,372,353,363,365,365,357,358,359,
-               358,369,351,380,362,376,367,368,366,364,361,368,360,365,367,398,371,359))
-sum(infantgut>=365)
 
 ```
 
