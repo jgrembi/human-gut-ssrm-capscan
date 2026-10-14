@@ -154,5 +154,43 @@ asr_unique_cluster <- asr %>%
 saveRDS(asr_unique_cluster, file = paste0(dataDir, "/asr_unique_cluster.rds"))
 ```
 
+## Sequencing depth for samples
+```{r}
+original_capscan_study_meta <- readRDS(paste0(dataDir, "sample_data_from_original_capscan_study.RDS"))
+
+capsules_stool_used <- original_capscan_study_meta %>%
+  filter(!meta_samplename %in% samples_drop) %>%
+  filter(!Type=="Saliva") %>%
+  filter(!Subject %in% c("Control_1", "Control_2")) %>%
+  filter(!Set %in% c(1,6,7,8,9,10,11,12,13)) %>%
+  # remove 7 samples that were resequenced (subject 4,    subject 3)
+  #keep sample with more mapped reads
+  filter(!meta_samplename %in% c("O17_1", "O19_1", "O21_1", "L23_1",     "K23_1", "M15_1", "M23_1")) %>%
+  # remove 22 samples not in our analysis (most were gas, etc.)
+  filter(meta_samplename %in% samples_used$samplename) %>%
+  # there are 8 samples that have duplicates, but the filtered read count is the same for both; remove one
+  filter(!(meta_samplename %in% c("F13_2", "F15_2", "H3_2", "H7_2", "H9_2", "H15_2", "H17_2", "H19_2") & 
+           is.na(DNA.ng.ul)))
+  
+duplicates <- capsules_used %>%
+  group_by(meta_samplename) %>%
+  filter(n()>1)
+
+# get sequencing depth in millions of reads
+depth_table <- capsules_stool_used %>%
+  group_by(location) %>%
+  summarize(n_samples = n(),
+            median_depth = round_tidy(median(reads_meta_filtered)/1E6,2),
+            depth_25pct = round_tidy(quantile(reads_meta_filtered, probs = 0.25)/1E6,2),
+            depth_75pct = round_tidy(quantile(reads_meta_filtered, probs = 0.75)/1e6,2))
+  
+# get sequencing depth for controls
+controls_depth <- original_capscan_study_meta %>%
+  filter(Subject == "Control") %>%
+  summarize(n_samples = n(),
+            median_depth = round_tidy(median(reads_meta_filtered),2),
+            depth_25pct = round_tidy(quantile(reads_meta_filtered, probs = 0.25),2),
+            depth_75pct = round_tidy(quantile(reads_meta_filtered, probs = 0.75),2))
+```
 
 
