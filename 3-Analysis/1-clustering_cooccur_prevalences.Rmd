@@ -77,6 +77,7 @@ hits_final <- readRDS(paste0(dataDir, "/hits_final_sample_prev.rds"))
 # want to include only the OTUs that have hits 
 names <- hits_final$single_closest_ref
 hits_in_cluster_df <- clusters_df %>% filter(OTU %in% names) 
+saveRDS(hits_in_cluster_df, paste0(clusterDir, "/all_clusters.rds"))
 
 # testing in console
 for (cluster in unique(hits_in_cluster_df$cluster)) {
