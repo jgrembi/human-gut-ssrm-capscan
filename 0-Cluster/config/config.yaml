@@ -74,3 +74,6 @@ SAMDir: "workflow/out/mapping/sam"
 prodigalDir: "workflow/out/prodigal"
 dsrHMMERDir: "workflow/out/dsrAB_hmmer"
 geneReadsDir: "workflow/out/mapping/bam/CoAssembly_gene_reads"
+
+# Directory for blasting hits against reference sequences
+refIdentityDir: "workflow/out/refIdentity"

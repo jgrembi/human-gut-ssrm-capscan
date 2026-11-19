@@ -134,8 +134,22 @@ rule all:
 		expand(join(config["hmmOutDir"],"{control}_dsrAB_arch.hmm.out"), control = control),
 		expand(join(config["domtblDir"],"{control}_dsrAB_arch.domtblout"), control = control),
 		expand(join(config["msaDir"],"sto/{control}_dsrAB_bact.sto"), control = control),
-		expand(join(config["msaDir"],"sto/{control}_dsrAB_arch.sto") control = control)
+		expand(join(config["msaDir"],"sto/{control}_dsrAB_arch.sto") control = control),
 
+		# blast hits against reference leaves
+		# can reuse the reference faa and db from NCBI snakefile
+		join(config["refIdentityDir"],"OTUs_to_ref.faa"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pdb"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.phr"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pin"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pjs"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pot"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.psq"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.ptf"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pto"),
+		
+		join(config["refIdentityDir"],"hits_capsule.faa"),
+		join(config["refIdentityDir"],"out/capsule_blast.txt"),
 
 ## getting abundances below 
 		# get bowtie 2 index
@@ -255,6 +269,7 @@ include: "workflow/rules/cleanHitsCapsule.smk"
 include: "workflow/rules/fragmentInsertionCapsule.smk"
 include: "workflow/rules/getTreeInfoCapsule.smk"
 include: "workflow/rules/runHMMER_controls.smk"
+include: "workflow/rules/refIdentity.smk"
 include: "workflow/rules/mapReads.smk"
 include: "workflow/rules/perGeneCounts.smk"
 include: "workflow/rules/getGeneAbunCapsule.smk"

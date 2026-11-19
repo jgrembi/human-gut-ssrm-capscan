@@ -39,3 +39,5 @@ Move into RStudio for data visualization
        6. asr_abundance_figures.Rmd
        7. capscan_contamination_check.Rmd
             - analyzing whether removing **potentially** contaminated capsule samples changes results
+       8. closest_references.Rmd
+            - refIdentity.smk as well -> to blast the hits against the reference leaves
