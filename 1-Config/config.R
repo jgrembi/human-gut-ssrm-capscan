@@ -47,6 +47,7 @@ library(ggtext)
 library(lme4)
 library(lmerTest)
 library(scales)
+library(writexl)
 
 
 # fix conflicts between packages
