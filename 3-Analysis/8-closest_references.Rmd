@@ -91,7 +91,8 @@ closest_refs_blast <- NCBI_blast %>%
 single_closest_refs_blast <- closest_refs_blast %>%
   left_join((hits_final_ages %>% select(hit_id,single_closest_ref)), by = c("hit_id"="hit_id", "ref" = "single_closest_ref")) %>%
   group_by(hit_id) %>%
-  filter(ref == single_closest_ref)
+  filter(ref == single_closest_ref) %>%
+  select(-c(SRM_present,under_over_3,closest_ref,query_id,single_closest_ref))
 
 (nrow(single_closest_refs_blast %>% filter(percent_id >= 90))/
   nrow(single_closest_refs_blast))
@@ -112,7 +113,9 @@ capsule_blast <- read_csv(paste0(refIdentityDir, "out/capsule_blast.txt"), col_n
 capsule_single_closest_refs_blast <- capsule_blast %>%
   left_join((samples_unique_subunit_RPKG %>% select(geneLoc, geneNum, single_closest_ref, sample)), by = c("hit_id"="geneLoc", "ref" = "single_closest_ref")) %>%
   filter(!is.na(geneNum)) %>%
-  distinct()
+  distinct() %>%
+  select(-geneNum) %>%
+  relocate(sample, .after = hit_id)
 
 (nrow(capsule_single_closest_refs_blast %>% filter(percent_id >= 90))/
   nrow(capsule_single_closest_refs_blast))
@@ -120,4 +123,11 @@ capsule_single_closest_refs_blast <- capsule_blast %>%
 ggplot(capsule_single_closest_refs_blast, aes(x = percent_id)) +
   geom_histogram(position = "identity")
 ```
+# get xlsx file with two blast results
+```{r}
+write_xlsx(
+  list(Sheet1 = single_closest_refs_blast, Sheet2 = capsule_single_closest_refs_blast), 
+  paste0(suppTableDir, "blast_against_ref_leaves.xlsx"))
+```
+
 
