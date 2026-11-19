@@ -22,7 +22,7 @@ rule removeTwoDups:
 	input:
 		join(config["cleanHitsDir"],"compiled_dsrAB_hits_scoreThreshold_assemblies.faa")
 	output:
-		join(config["refIdentityDir"],"compiled_dsrAB_hits_scoreThreshold_assemblies_filtered.faa"),
+		join(config["refIdentityDir"],"compiled_dsrAB_hits_scoreThreshold_assemblies_filtered.faa")
 	resources:
 		mem_mb=4000,
 		time=60
