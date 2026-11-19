@@ -116,7 +116,21 @@ rule all:
 		expand(join(config["clusterBlastDB"],"{cluster}_db_nuc_015.ntf"), cluster=clusters_015),
 		expand(join(config["clusterBlastDB"],"{cluster}_db_nuc_015.nto"), cluster=clusters_015),
 		expand(join(config["clusterBlastOutput"],"{cluster}_cluster_blast_015.out"), cluster=clusters_015),
-		expand(join(config["clusterANI"],"{cluster}_clusterANI_015.csv"), cluster=clusters_015)
+		expand(join(config["clusterANI"],"{cluster}_clusterANI_015.csv"), cluster=clusters_015),
+
+		# blast NCBI hit sequences against reference leaf sequences
+		join(config["refIdentityDir"],"OTUs_to_ref.faa"),
+		join(config["refIdentityDir"],"compiled_dsrAB_hits_scoreThreshold_assemblies_filtered.faa"),
+		join(config["refIdentityDir"],"hits_all.faa"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pdb"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.phr"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pin"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pjs"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pot"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.psq"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.ptf"),
+		join(config["refIdentityDir"],"db/OTUs_to_ref.pto"),
+		join(config["refIdentityDir"],"out/NCBI_blast.txt")
 
 include: "workflow/rules/prepAnantharaman.smk"
 include: "workflow/rules/downloadMetagenomicData.smk"
@@ -127,3 +141,4 @@ include: "workflow/rules/fragmentInsertion.smk"
 include: "workflow/rules/getTreeInfo.smk"
 include: "workflow/rules/makeTaxaTable.smk"
 include: "workflow/rules/ANI_for_clusters.smk"
+include: "workflow/rules/refIdentity.smk"
