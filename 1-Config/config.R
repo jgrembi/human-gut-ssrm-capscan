@@ -83,6 +83,7 @@ clusterDir = paste0(here::here(), "/0-Cluster/workflow/out/clustering_otus/ids")
 taxaDir = paste0(here::here(), "/0-Cluster/workflow/out/clustering_test")
 geneReadsDir = paste0(here::here(), "/0-Cluster/workflow/out/mapping/bam/CoAssembly_gene_reads/")
 microbeCensusDir = paste0(here::here(), "/0-Cluster/workflow/out/microbeCensus/")
+refIdentityDir = paste0(here::here(), "/0-Cluster/workflow/out/refIdentity/")
 
 dataDir = paste0(here::here(), "/data/")
 figureDir = paste0(here::here(), "/4-Figures/")

@@ -1,0 +1,123 @@
+---
+title: "closest references from different clusters"
+output: html_document
+date: "2024-04-18"
+---
+# Read in packages, functions, and directories
+```{r}
+source(paste0(here::here(), "/1-Config/config.R"))
+```
+### Getting percent identity for putative hits and all closest references
+
+# NCBI hits (n=4093)
+```{r}
+# remove hits that were not inserted properly or are too far (Moorella thermoacetica)
+hits_final_ages <- readRDS(paste0(dataDir, "/hits_final_ages_no_MA.rds")) %>%
+  # removes one of archaeoglobus hits that wasn't removed in other spots but had no bearing on results
+  filter(is.na(distance) | distance <= 2.50) %>%
+  #remove one of the hits from the three exact duplicates ("ORJZ01.17253.1_1/2-182", "OWUN01.41726.1_1/1-246", "OWAH01.53685.1_1/1-179")
+  distinct()
+
+# make txt file of NCBI hits to blast
+write_lines(hits_final_ages$hit_id, file = paste0(refIdentityDir, "hits_all.txt"))
+```
+
+# for the rest of the project, only one hit per contig was selected when there are multiple hits to the same contig with different single_closest_ref. I want to get the identities for all 4093 putative hits, though, so this OTUs list is 40 instead of 36 (35 without archaeoglobus)
+```{r}
+OTUs_to_ref <- hits_final_ages %>%
+  mutate(hit_id = hit_id,
+         OTU = str_extract_all(closest_ref, "'[^']+'")) %>%
+  unnest(OTU) %>%
+  distinct(OTU) %>%
+  mutate(OTU = str_remove_all(OTU, "'"))
+
+write_lines(OTUs_to_ref$OTU, file = paste0(refIdentityDir, "OTUs_to_ref.txt"))
+```
+
+# CapScan hits (n=331)
+```{r}
+### Read in datasets from dm_abundance
+samples_unique_gene_casette <- readRDS(paste0(dataDir, "/samples_unique_genes_with_names_no_2018.rds"))
+
+#looking to see which contigs are mapping to several species
+contigs_multiple_refs <- samples_unique_gene_casette %>%
+  group_by(contig) %>%
+  filter(n_distinct(single_closest_ref) > 1)%>%
+  # filter out contigs where multiple species are both Bilophila species or both D. piger; we don't care about these
+  # want to fix the contigs mapping to species that are farther apart on the tree
+  filter(!all(grepl("Bil|piger", single_closest_ref))) %>%
+  summarize(
+    n_refs = n_distinct(single_closest_ref),
+    refs = paste(unique(single_closest_ref), collapse = "; ")
+  )
+
+### choose a representative subunit
+# manually select a subunit for the 6 contigs found in contigs_multiple_refs
+partial_genes <- c("Capsule_14.k141_153065_1", "Stool_14.k141_240693_1", "Stool_9.k141_270672_1")
+unknown_species <- c("Capsule_7.k141_250498_14", "Stool_7.k141_215370_50")
+# and rename 113757 to D. piger based on blast results
+
+samples_unique_subunit_manual <- samples_unique_gene_casette %>%
+  filter(!geneNum %in% partial_genes) %>%
+  filter(!geneNum %in% unknown_species) %>%
+  mutate(single_closest_ref = ifelse(contig == "k141_113757", "Desulfovibrio_piger__DslPige3", single_closest_ref))
+
+## value of 331 comes from this
+samples_unique_subunit_RPKG <- samples_unique_subunit_manual %>%
+  filter(single_closest_ref != "Moorella_thermoacetica_Y72_copy_2__MooTher5") %>%
+  group_by(contig, sample) %>%
+  slice_max(RPKG, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+write_lines(samples_unique_subunit_RPKG$geneLoc, file = paste0(refIdentityDir, "hits_capsule.txt"))
+```
+
+# read in blast results from cluster
+# NCBI
+```{r}
+NCBI_blast <- read_csv(paste0(refIdentityDir, "out/NCBI_blast.txt"), col_names = FALSE) %>%
+  rename(hit_id=X1, ref=X2, percent_id=X3, query_cov=X4, evalue=X5)
+  
+closest_refs_tree <- hits_final_ages %>%
+  mutate(OTU = str_extract_all(closest_ref, "'[^']+'")) %>%
+  unnest(OTU) %>%
+  mutate(OTU = str_remove_all(OTU, "'")) %>%
+  rename(ref=OTU)
+
+closest_refs_blast <- NCBI_blast %>%
+  left_join(closest_refs_tree, by = c("hit_id", "ref")) %>%
+  filter(!is.na(biosample_id))
+
+single_closest_refs_blast <- closest_refs_blast %>%
+  left_join((hits_final_ages %>% select(hit_id,single_closest_ref)), by = c("hit_id"="hit_id", "ref" = "single_closest_ref")) %>%
+  group_by(hit_id) %>%
+  filter(ref == single_closest_ref)
+
+(nrow(single_closest_refs_blast %>% filter(percent_id >= 90))/
+  nrow(single_closest_refs_blast))
+
+ggplot(closest_refs_blast, aes(x = percent_id)) +
+  geom_histogram(position = "identity")
+ggplot(single_closest_refs_blast, aes(x = percent_id)) +
+  geom_histogram(position = "identity")
+
+# the only hit that did not have one of its closest references cross the evalue threshold was 
+#ORVI01.95990.1_1/7-122
+```
+# CapScan
+```{r}
+capsule_blast <- read_csv(paste0(refIdentityDir, "out/capsule_blast.txt"), col_names = FALSE) %>%
+  rename(hit_id=X1, ref=X2, percent_id=X3, query_cov=X4, evalue=X5)
+
+capsule_single_closest_refs_blast <- capsule_blast %>%
+  left_join((samples_unique_subunit_RPKG %>% select(geneLoc, geneNum, single_closest_ref, sample)), by = c("hit_id"="geneLoc", "ref" = "single_closest_ref")) %>%
+  filter(!is.na(geneNum)) %>%
+  distinct()
+
+(nrow(capsule_single_closest_refs_blast %>% filter(percent_id >= 90))/
+  nrow(capsule_single_closest_refs_blast))
+
+ggplot(capsule_single_closest_refs_blast, aes(x = percent_id)) +
+  geom_histogram(position = "identity")
+```
+
