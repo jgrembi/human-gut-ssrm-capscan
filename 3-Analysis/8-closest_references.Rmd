@@ -92,7 +92,14 @@ single_closest_refs_blast <- closest_refs_blast %>%
   left_join((hits_final_ages %>% select(hit_id,single_closest_ref)), by = c("hit_id"="hit_id", "ref" = "single_closest_ref")) %>%
   group_by(hit_id) %>%
   filter(ref == single_closest_ref) %>%
-  select(-c(SRM_present,under_over_3,closest_ref,query_id,single_closest_ref))
+  select(-c(SRM_present,under_over_3,closest_ref,query_id,single_closest_ref)) %>%
+  rename(`Hit ID` = hit_id,
+         `Single closest reference` = ref,
+         `Percent a.a. identity` = percent_id,
+         `Query coverage` = query_cov,
+         `E value` = evalue,
+         `Biosample ID` = biosample_id,
+         `Distance to reference leaf` = distance)
 
 (nrow(single_closest_refs_blast %>% filter(percent_id >= 90))/
   nrow(single_closest_refs_blast))
@@ -115,7 +122,14 @@ capsule_single_closest_refs_blast <- capsule_blast %>%
   filter(!is.na(geneNum)) %>%
   distinct() %>%
   select(-geneNum) %>%
-  relocate(sample, .after = hit_id)
+  relocate(sample, .after = hit_id) %>%
+  rename(`Hit ID` = hit_id,
+         Sample = sample,
+         `Single closest reference` = ref,
+         `Percent a.a. identity` = percent_id,
+         `Query coverage` = query_cov,
+         `E value` = evalue)
+         
 
 (nrow(capsule_single_closest_refs_blast %>% filter(percent_id >= 90))/
   nrow(capsule_single_closest_refs_blast))
@@ -126,7 +140,7 @@ ggplot(capsule_single_closest_refs_blast, aes(x = percent_id)) +
 # get xlsx file with two blast results
 ```{r}
 write_xlsx(
-  list(Sheet1 = single_closest_refs_blast, Sheet2 = capsule_single_closest_refs_blast), 
+  list(Sheet1 = single_closest_refs_blast %>% arrange(desc(`Percent a.a. identity`), desc(`Query coverage`)), Sheet2 = capsule_single_closest_refs_blast %>% arrange(desc(`Percent a.a. identity`), desc(`Query coverage`))),
   paste0(suppTableDir, "blast_against_ref_leaves.xlsx"))
 ```
 
